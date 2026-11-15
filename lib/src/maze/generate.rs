@@ -10,7 +10,7 @@
 use super::hub::Algorithm;
 use crate::rng::Rng;
 use crate::tiling::Tiling;
-use crate::track::clearance::Clearance;
+use crate::track::clearance::{is_crossing, Clearance};
 
 /// How tracks may share a tile.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -31,6 +31,10 @@ pub struct GenerateOptions {
     /// How often a tile that already holds a track may take a second, separate
     /// one (0 never, 1 whenever it fits).
     pub pass_through: f64,
+    /// How often a tile may take a track that crosses the one already there,
+    /// as a bridge (0 never, 1 whenever it fits). Only tiles of four or more
+    /// sides have room.
+    pub crossings: f64,
     /// How strongly to prefer going straight through a tile (0 no preference).
     pub straightness: f64,
 }
@@ -41,6 +45,7 @@ impl Default for GenerateOptions {
             mode: Mode::PassThrough,
             algorithm: Algorithm::Wilson,
             pass_through: 0.7,
+            crossings: 0.3,
             straightness: 0.3,
         }
     }
@@ -175,6 +180,11 @@ impl State<'_> {
         let open = |e: usize| was_open[e] || e == ea || e == eb;
         let kind = face.kind;
         let labels = self.labels(chord.face, &open, &chords);
+        // Checked after pass-through and without touching the random numbers
+        // when crossings are off, so that setting repeats older mazes exactly.
+        if is_crossing(&labels) && (options.crossings <= 0.0 || !rng.chance(options.crossings)) {
+            return false;
+        }
         if !self.clearance.allows(kind, &labels) {
             return false;
         }
@@ -201,6 +211,67 @@ impl State<'_> {
 }
 
 impl State<'_> {
+    /// Before the sweeps, gives each tile of four or more sides a bridge with
+    /// probability `crossings`: two through-tracks that cross, chosen at
+    /// random from those that draw cleanly.
+    ///
+    /// Bridges are laid first because they can't easily appear later. Once
+    /// the sweeps have joined a tile's ports into one tree, a crossing track
+    /// would close a loop, and the tile is usually crowded with dead ends by
+    /// then anyway. Laid first, each bridge just joins four separate ports into
+    /// two pairs, and the sweeps grow the rest of the maze round it.
+    fn lay_bridges(&mut self, uf: &mut UnionFind, rng: &mut Rng, crossings: f64) {
+        let tiling = self.tiling;
+        for (f, face) in tiling.faces.iter().enumerate() {
+            let n = face.kind.sides();
+            if n < 4 || !rng.chance(crossings) {
+                continue;
+            }
+            let interior = |s: usize| tiling.edges[face.edges[s]].is_interior();
+            // Every pair of crossing chords a < b < c < d: (a, c) and (b, d).
+            let mut choices = Vec::new();
+            for a in 0..n {
+                for b in a + 1..n {
+                    for c in b + 1..n {
+                        for d in c + 1..n {
+                            if [a, b, c, d].iter().all(|&s| interior(s)) {
+                                choices.push([a, b, c, d]);
+                            }
+                        }
+                    }
+                }
+            }
+            rng.shuffle(&mut choices);
+            for [a, b, c, d] in choices {
+                let edges = [a, b, c, d].map(|s| face.edges[s]);
+                if uf.find(edges[0]) == uf.find(edges[2]) || uf.find(edges[1]) == uf.find(edges[3])
+                {
+                    continue;
+                }
+                let mut chords = self.chords[f].clone();
+                if [a, b, c, d].iter().any(|&s| chords[s] != 0) {
+                    continue;
+                }
+                let fresh = chords.iter().copied().max().unwrap_or(0);
+                chords[a] = fresh + 1;
+                chords[c] = fresh + 1;
+                chords[b] = fresh + 2;
+                chords[d] = fresh + 2;
+                let open = |e: usize| self.open[e] || edges.contains(&e);
+                let labels = self.labels(f, &open, &chords);
+                if self.clearance.allows(face.kind, &labels) {
+                    self.chords[f] = chords;
+                    for e in edges {
+                        self.open[e] = true;
+                    }
+                    uf.union(edges[0], edges[2]);
+                    uf.union(edges[1], edges[3]);
+                    break;
+                }
+            }
+        }
+    }
+
     /// Makes every tile drawable again after the unchecked sweeps.
     ///
     /// A crowded tile's dead ends are first offered to its existing tracks:
@@ -333,6 +404,10 @@ pub(super) fn generate(
         open: vec![false; tiling.edges.len()],
     };
     let mut uf = UnionFind::new(tiling.edges.len());
+
+    if options.crossings > 0.0 {
+        state.lay_bridges(&mut uf, rng, options.crossings);
+    }
 
     // The first sweeps keep every tile drawable as they go, which suits
     // hexagons. In triangles and squares that can deadlock: two neighbouring

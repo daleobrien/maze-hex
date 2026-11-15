@@ -186,6 +186,19 @@ mod tests {
         }
     }
 
+    /// A maze with crossings off, which repeats the mazes made before
+    /// bridges existed.
+    fn maze_without_crossings(name: &str, seed: u64) -> Maze {
+        let source = source_by_name(name).expect("a known tiling");
+        let tiling = source.build(Region::rectangle(14.0, 10.0), &mut Rng::new(seed));
+        let mut options = MazeOptions {
+            seed,
+            ..MazeOptions::default()
+        };
+        options.generate.crossings = 0.0;
+        Maze::generate(tiling, &options).expect("room for a maze")
+    }
+
     /// FNV-1a over the debug text of every tile's blocks.
     fn fingerprint(maze: &Maze) -> u64 {
         format!("{:?}", maze.blocks)
@@ -207,7 +220,43 @@ mod tests {
             ("triangle-hexagon", 186290123505539694),
         ];
         for (name, want) in pinned {
-            assert_eq!(fingerprint(&maze(name, 3)), want, "{name}");
+            assert_eq!(
+                fingerprint(&maze_without_crossings(name, 3)),
+                want,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn bridges_appear_only_in_tiles_of_four_or_more_sides() {
+        for name in source_names() {
+            let source = source_by_name(name).expect("a known tiling");
+            let tiling = source.build(Region::rectangle(14.0, 10.0), &mut Rng::new(2));
+            let mut options = MazeOptions {
+                seed: 2,
+                ..MazeOptions::default()
+            };
+            options.generate.crossings = 0.8;
+            let maze = Maze::generate(tiling, &options).expect("room for a maze");
+            assert!(maze.is_one_tree(), "{name}");
+            for (f, bridge) in maze.bridges.iter().enumerate() {
+                if let Some(bridge) = bridge {
+                    assert!(maze.tiling.faces[f].kind.sides() >= 4, "{name}");
+                    assert_eq!(maze.blocks[f][bridge.over].len(), 2, "{name}");
+                    assert_eq!(maze.blocks[f][bridge.under].len(), 2, "{name}");
+                }
+            }
+            // Where every neighbour of a hexagon is a triangle (3.6.3.6), a
+            // bridge's ends can't fit beside the triangles' own tracks and
+            // are cut back, so only some tilings are sure to keep bridges.
+            let bridges = maze.bridges.iter().flatten().count();
+            if ["hexagonal", "square", "rhombitrihexagonal"].contains(&name) {
+                assert!(bridges > 0, "{name}: no bridges");
+            }
+            if maze.tiling.faces.iter().all(|f| f.kind.sides() < 4) {
+                assert_eq!(bridges, 0, "{name}");
+            }
         }
     }
 

@@ -134,6 +134,7 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
                 algorithm_given = true;
             }
             "--pass-through" => options.generate.pass_through = fraction(arg, &mut rest)?,
+            "--crossings" => options.generate.crossings = fraction(arg, &mut rest)?,
             "--straightness" => options.generate.straightness = fraction(arg, &mut rest)?,
             other if other.starts_with('-') => return Err(format!("unknown flag '{other}'")),
             other => return Err(format!("unexpected argument '{other}'")),
@@ -232,6 +233,8 @@ usage: maze-hex [options]
                       track block in each tile, so the maze spans every tile
   --algorithm NAME    hub mode only: wilson, backtracker, kruskal or prim (default {algorithm})
   --pass-through F    how often a tile may take a second track, 0 to 1 (default {pass_through})
+  --crossings F       how often a track may cross another as a bridge, 0 to 1
+                      (default {crossings}); tiles of four or more sides only
   --straightness F    preference for going straight through a tile, 0 to 1 (default {straightness})
   -h, --help          print this help and exit
 ",
@@ -243,6 +246,7 @@ usage: maze-hex [options]
         cap_depth = d.style.cap_depth,
         algorithm = d.generate.algorithm.name(),
         pass_through = d.generate.pass_through,
+        crossings = d.generate.crossings,
         straightness = d.generate.straightness,
     )
 }
@@ -312,6 +316,8 @@ mod tests {
             "prim",
             "--pass-through",
             "0.2",
+            "--crossings",
+            "0.3",
             "--straightness",
             "1",
         ])
@@ -329,6 +335,7 @@ mod tests {
         assert_eq!(o.generate.mode, TrackMode::Hub);
         assert_eq!(o.generate.algorithm, Algorithm::Prim);
         assert_eq!(o.generate.pass_through, 0.2);
+        assert_eq!(o.generate.crossings, 0.3);
         assert_eq!(o.generate.straightness, 1.0);
     }
 

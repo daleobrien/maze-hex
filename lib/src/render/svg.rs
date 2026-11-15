@@ -8,7 +8,7 @@
 use std::fmt::Write;
 
 use super::ink::{self, Pen, Point};
-use super::walls::{wall_strokes, Stroke};
+use super::walls::{bridges, wall_strokes, Stroke};
 use crate::maze::Maze;
 use crate::track::curve::{Curve, V2};
 use crate::track::face::FaceGeometry;
@@ -170,10 +170,12 @@ pub fn render(maze: &Maze, options: &SvgOptions) -> String {
     );
     let _ = writeln!(svg, "<g transform='translate(0,{h:.2}) scale(1,-1)'>");
 
-    let strokes = wall_strokes(maze);
+    // Walls without the bridges' upper tracks, which go on last.
+    let strokes = wall_strokes(maze, true);
     // The pen is seeded from the maze, so one seed repeats the whole drawing.
     let pen = Pen::new(maze.seed);
-    let loops: Vec<Vec<Point>> = strokes
+    // The fill needs whole loops, so it takes every wall.
+    let loops: Vec<Vec<Point>> = wall_strokes(maze, false)
         .iter()
         .filter(|s| s.closed)
         .map(|s| frame.polyline(s))
@@ -248,6 +250,52 @@ pub fn render(maze: &Maze, options: &SvgOptions) -> String {
         }
     }
 
+    // Each bridge's upper track: paper over whatever passes beneath, then its
+    // walls, then the route again where the route itself goes over.
+    for bridge in bridges(maze) {
+        if options.plain {
+            let _ = writeln!(
+                svg,
+                "<path fill='white' stroke='none' d='{}'/>",
+                frame.path(&bridge.outline, true)
+            );
+            let walls: Vec<String> = bridge
+                .walls
+                .iter()
+                .map(|s| frame.path(&s.curves, false))
+                .collect();
+            let _ = writeln!(
+                svg,
+                "<path fill='none' stroke='{WALL}' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round' d='{}'/>",
+                walls.join("")
+            );
+        } else {
+            let mut outline = frame.sampled(&bridge.outline);
+            outline.pop(); // the outline ends where it started
+            svg.push_str(&ink::fill_markup(&[outline], &pen));
+            let lines: Vec<(Vec<Point>, bool)> = bridge
+                .walls
+                .iter()
+                .map(|s| (frame.sampled(&s.curves), false))
+                .collect();
+            svg.push_str(&ink::wall_markup(&lines, &pen));
+        }
+    }
+    if options.solution {
+        for piece in route_over_bridges(maze) {
+            if options.plain {
+                let _ = writeln!(
+                    svg,
+                    "<path fill='none' stroke='{RED}' stroke-opacity='0.85' stroke-width='{:.2}' stroke-linecap='round' d='{}'/>",
+                    maze.style.width * SCALE * 0.3,
+                    frame.path(&[piece], false)
+                );
+            } else {
+                svg.push_str(&ink::pencil_markup(&frame.sampled(&[piece]), &pen));
+            }
+        }
+    }
+
     let caps = [maze.entrance, maze.exit].map(|cap| frame.at(maze.cap_centre(cap)));
     let marker = maze.style.width * SCALE * 0.38;
     if options.plain {
@@ -277,6 +325,21 @@ pub fn render(maze: &Maze, options: &SvgOptions) -> String {
     }
     svg.push_str("</svg>\n");
     svg
+}
+
+/// The pieces of the route that run along a bridge's upper track, to draw
+/// again on top of it. Where the route runs beneath, the bridge hides it.
+fn route_over_bridges(maze: &Maze) -> Vec<Curve> {
+    maze.solution()
+        .iter()
+        .filter_map(|step| {
+            let bridge = maze.bridges[step.face]?;
+            let (from, to) = (step.from?, step.to?);
+            let block = &maze.blocks[step.face][bridge.over];
+            (block.contains(&from) && block.contains(&to))
+                .then(|| FaceGeometry::of(&maze.tiling, step.face).centreline(from, to))
+        })
+        .collect()
 }
 
 /// The centreline of the route from the entrance's cap to the exit's.
@@ -371,6 +434,36 @@ mod tests {
         assert!(svg.contains("<polygon") && svg.contains("<text") && svg.contains("<circle"));
     }
 
+    /// Crossings off, which repeats the mazes made before bridges existed.
+    fn hex_maze_without_crossings(seed: u64) -> Maze {
+        let source = source_by_name("hexagonal").expect("hexagonal exists");
+        let tiling = source.build(Region::rectangle(12.0, 9.0), &mut Rng::new(seed));
+        let mut options = MazeOptions {
+            seed,
+            ..MazeOptions::default()
+        };
+        options.generate.crossings = 0.0;
+        Maze::generate(tiling, &options).expect("a maze")
+    }
+
+    #[test]
+    fn bridges_draw_in_plain_and_ink() {
+        let maze = hex_maze(4);
+        assert!(
+            maze.bridges.iter().any(Option::is_some),
+            "no bridge to test"
+        );
+        for plain in [true, false] {
+            let options = SvgOptions {
+                solution: true,
+                plain,
+                ..SvgOptions::default()
+            };
+            let svg = render(&maze, &options);
+            assert!(svg.starts_with("<svg") && svg.trim_end().ends_with("</svg>"));
+        }
+    }
+
     #[test]
     fn plain_output_is_unchanged() {
         // Taken from the plain renderer before ink existed, so adding ink
@@ -382,7 +475,7 @@ mod tests {
             ports: true,
             plain: true,
         };
-        let svg = render(&hex_maze(4), &options);
+        let svg = render(&hex_maze_without_crossings(4), &options);
         assert_eq!((svg.len(), fnv(&svg)), (17709, 0x1ff0_aff1_c4cc_6b7a));
     }
 

@@ -11,10 +11,14 @@ The one rule that makes it different from Lubra:
 
 Lubra's tracks can leave a triangle at six node positions and pass over and
 under each other. That needs hundreds of generated fragments, clearance tables,
-a visible/hidden net split and a drawing order. With edge-middle connections
-and no crossings, maze-hex needs none of it. Each tile's drawing depends only on
-which of its edges are open and how they are grouped, and it never leaves the
-tile.
+a visible/hidden net split and a drawing order. With edge-middle connections,
+maze-hex needs none of it. Each tile's drawing depends only on which of its
+edges are open and how they are grouped, and it never leaves the tile.
+
+Tracks may still cross, as **bridges** (§4.4): in a tile of four or more sides,
+two through-tracks can cross, one passing over the other. Because the bridge
+stays inside its tile, its over/under is decided and drawn there alone, so
+there is still no drawing order across the maze.
 
 ---
 
@@ -297,6 +301,36 @@ maze to share this look.
 can leave a tile blank. Lubra accepts that, and maze-hex can too. The default
 is `0` here because blank tiles in a hexagon grid stand out more.
 
+### 4.4 Bridges (`--crossings`)
+
+*Decided after the first build:* tiles of four or more sides may hold one
+crossing, drawn as a bridge.
+
+- **What may cross.** Exactly two blocks of two sides each (through-tracks, no
+  junctions), and only one crossing per tile. Any other blocks in the tile must
+  not cross anything. Triangles have too few sides to cross.
+- **Clearance.** The two tracks' walls may cross each other; every other check
+  in §5.4 still applies. The centrelines must cross at 40° or more and at
+  least one track width inside the tile, so it reads as one track passing over
+  the other. At width 0.4 a square has one bridge state (the straight cross) and
+  a hexagon 39.
+- **Generation.** Before the sweeps, each tile of four or more sides gets a
+  bridge with probability `--crossings` (default 0.3): two crossing chords
+  picked at random from those that draw cleanly. Bridges must come first: once
+  the sweeps have joined a tile's ports into one tree, a crossing track would
+  close a loop. The sweeps then grow the rest of the maze round them. Setting
+  `--crossings 0` repeats the mazes made before bridges existed, exactly.
+- **Limit.** Where a hexagon's neighbours are all triangles (3.6.3.6), the
+  bridge's ends can't fit beside the triangles' own tracks and are cut back
+  by the repair pass, so that tiling rarely keeps a bridge.
+- **Over or under.** A coin per bridge, from its own random stream, so it
+  doesn't disturb the maze.
+- **Drawing.** Everything else is drawn first: the walls (without the upper
+  track's), then the route. Then each bridge paints its upper band in the
+  track colour, covering the lower track, and draws its two walls. The route
+  is drawn again where it runs over a bridge; where it runs under, the bridge
+  hides it (Lubra pencils it lightly there, a possible refinement).
+
 ## 5. Drawing
 
 ### 5.1 The centreline between two ports
@@ -433,8 +467,8 @@ Still to add, by phase:
   over many seeds, and the tiling tests (exact edges, 360° corners, one piece)
   run on each generator's output.
 - **Determinism**: the same seed and flags give byte-identical SVG.
-- **Non-crossing**: no tile holds two crossing chords (property test over many
-  seeds).
+- **Non-crossing**: no tile holds crossing chords except one bridge of two
+  through-tracks, and only in tiles of four or more sides.
 - **Containment and clearance**: sampled wall points stay inside their tile, by
   margin `m`, away from open ports. Different blocks stay at least `m` apart.
 - **Continuity**: chained walls make closed loops, one per tree component.
@@ -460,3 +494,4 @@ Still to add, by phase:
 | Hub or pass-through first | Pass-through first (phase 2); hub mode follows as `--mode hub` (phase 3) |
 | Where the repo lives | `~/Code/maze-hex` |
 | Ink pen | Copy Lubra's `ink.rs` for now; a shared crate can come later |
+| Crossings | Allowed in tiles of four or more sides, as bridges (§4.4) |

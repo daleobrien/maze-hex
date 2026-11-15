@@ -90,6 +90,8 @@ pub fn regular(kind: PolygonKind) -> FaceGeometry {
 #[derive(Debug)]
 pub struct Clearance {
     style: TrackStyle,
+    /// Whether a tile may hold one bridge: two through-tracks crossing.
+    crossings: bool,
     cache: HashMap<(PolygonKind, Vec<u8>), bool>,
 }
 
@@ -97,8 +99,17 @@ impl Clearance {
     pub fn new(style: TrackStyle) -> Self {
         Clearance {
             style,
+            crossings: false,
             cache: HashMap::new(),
         }
+    }
+
+    /// The same check, but letting a tile hold one bridge (see
+    /// [`bridge_of`]).
+    pub fn with_crossings(mut self, crossings: bool) -> Self {
+        self.crossings = crossings;
+        self.cache.clear();
+        self
     }
 
     pub fn style(&self) -> TrackStyle {
@@ -111,15 +122,57 @@ impl Clearance {
         if let Some(&answer) = self.cache.get(&key) {
             return answer;
         }
-        let answer = !is_crossing(&key.1) && self.draws_cleanly(kind, &key.1);
+        let answer = if is_crossing(&key.1) {
+            self.crossings
+                && bridge_of(&key.1)
+                    .is_some_and(|bridge| self.bridge_is_clear(kind, &key.1, bridge))
+        } else {
+            self.draws_cleanly(kind, &key.1, None)
+        };
         self.cache.insert(key, answer);
         answer
     }
 
-    fn draws_cleanly(&self, kind: PolygonKind, labels: &[u8]) -> bool {
+    /// Whether the two tracks of a bridge cross squarely enough to read as one
+    /// passing over the other, well inside the tile, and everything else in
+    /// the tile still draws cleanly.
+    fn bridge_is_clear(&self, kind: PolygonKind, labels: &[u8], bridge: (usize, usize)) -> bool {
+        let face = regular(kind);
+        let blocks = blocks_of(labels);
+        let line = |block: &Vec<usize>| face.centreline(block[0], block[1]).sample(SAMPLE_STEP);
+        let (a, b) = (line(&blocks[bridge.0]), line(&blocks[bridge.1]));
+        let Some((point, angle)) = crossing_point(&a, &b) else {
+            return false;
+        };
+        let deep_enough =
+            (0..face.sides()).all(|side| face.inside_distance(point, side) >= self.style.width);
+        angle >= MIN_CROSSING_ANGLE && deep_enough && self.draws_cleanly(kind, labels, Some(bridge))
+    }
+
+    /// Checks walls against the tile and each other. The walls of the two
+    /// tracks in `bridge` (block indices) are allowed to cross each other.
+    fn draws_cleanly(
+        &self,
+        kind: PolygonKind,
+        labels: &[u8],
+        bridge: Option<(usize, usize)>,
+    ) -> bool {
         let face = regular(kind);
         let style = self.style;
-        let walls = face.walls(&blocks_of(labels), &style);
+        let blocks = blocks_of(labels);
+        let mut walls = Vec::new();
+        let mut owner = Vec::new();
+        for (k, block) in blocks.iter().enumerate() {
+            for wall in face.walls(std::slice::from_ref(block), &style) {
+                walls.push(wall);
+                owner.push(k);
+            }
+        }
+        let exempt = |i: usize, j: usize| {
+            bridge.is_some_and(|(x, y)| {
+                (owner[i], owner[j]) == (x, y) || (owner[i], owner[j]) == (y, x)
+            })
+        };
         let samples: Vec<Vec<V2>> = walls
             .iter()
             .map(|wall| {
@@ -149,7 +202,7 @@ impl Clearance {
         let boxes: Vec<(V2, V2)> = samples.iter().map(|points| bounds(points)).collect();
         for i in 0..samples.len() {
             for j in i + 1..samples.len() {
-                if box_gap(boxes[i], boxes[j]) >= style.gap {
+                if exempt(i, j) || box_gap(boxes[i], boxes[j]) >= style.gap {
                     continue;
                 }
                 if samples[i]
@@ -162,6 +215,63 @@ impl Clearance {
         }
         true
     }
+}
+
+/// The least angle at which a bridge's two tracks may cross.
+const MIN_CROSSING_ANGLE: f64 = 40.0 * std::f64::consts::PI / 180.0;
+
+/// The two blocks (as indices into [`blocks_of`]) of a tile's one bridge: two
+/// tracks of two sides each that cross. `None` if nothing crosses, or if the
+/// crossing is anything else (more than one, or a junction involved), which
+/// can't be drawn as one track passing over another.
+pub fn bridge_of(labels: &[u8]) -> Option<(usize, usize)> {
+    let labels = canonical(labels);
+    let blocks = blocks_of(&labels);
+    let mut pairs = Vec::new();
+    for i in 0..blocks.len() {
+        for j in i + 1..blocks.len() {
+            if is_crossing(&pair_labels(labels.len(), &blocks[i], &blocks[j])) {
+                pairs.push((i, j));
+            }
+        }
+    }
+    match pairs[..] {
+        [(i, j)] if blocks[i].len() == 2 && blocks[j].len() == 2 => Some((i, j)),
+        _ => None,
+    }
+}
+
+/// Labels holding only two blocks, for testing whether that pair crosses.
+fn pair_labels(n: usize, a: &[usize], b: &[usize]) -> Vec<u8> {
+    let mut labels = vec![0; n];
+    for &s in a {
+        labels[s] = 1;
+    }
+    for &s in b {
+        labels[s] = 2;
+    }
+    labels
+}
+
+/// Where two polylines cross, and the angle between them there (0 to 90°).
+fn crossing_point(a: &[V2], b: &[V2]) -> Option<(V2, f64)> {
+    for i in 0..a.len().saturating_sub(1) {
+        for j in 0..b.len().saturating_sub(1) {
+            let (p, r) = (a[i], a[i + 1].minus(a[i]));
+            let (q, s) = (b[j], b[j + 1].minus(b[j]));
+            let denom = r.cross(s);
+            if denom.abs() < 1e-12 {
+                continue;
+            }
+            let t = q.minus(p).cross(s) / denom;
+            let u = q.minus(p).cross(r) / denom;
+            if (0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u) {
+                let cos = (r.dot(s) / (r.length() * s.length())).abs().min(1.0);
+                return Some((p.plus(r.scale(t)), cos.acos()));
+            }
+        }
+    }
+    None
 }
 
 /// The smallest box holding every point.
@@ -192,6 +302,13 @@ mod tests {
 
     /// Every state of an `n`-sided tile: each side closed or in a block.
     fn all_states(n: usize) -> Vec<Vec<u8>> {
+        let mut states = all_states_with_crossings(n);
+        states.retain(|s| !is_crossing(s));
+        states
+    }
+
+    /// Every state, crossing or not.
+    fn all_states_with_crossings(n: usize) -> Vec<Vec<u8>> {
         let mut states = vec![vec![]];
         for _ in 0..n {
             let mut next = Vec::new();
@@ -207,7 +324,6 @@ mod tests {
         let mut unique: Vec<Vec<u8>> = states.iter().map(|s| canonical(s)).collect();
         unique.sort();
         unique.dedup();
-        unique.retain(|s| !is_crossing(s));
         unique
     }
 
@@ -255,6 +371,30 @@ mod tests {
     }
 
     #[test]
+    fn bridges_need_crossings_turned_on() {
+        let straight_cross_square = [1, 2, 1, 2];
+        let straight_cross_hexagon = [1, 2, 0, 1, 2, 0];
+        let mut off = Clearance::new(TrackStyle::default());
+        assert!(!off.allows(Square, &straight_cross_square));
+        assert!(!off.allows(Hexagon, &straight_cross_hexagon));
+        let mut on = Clearance::new(TrackStyle::default()).with_crossings(true);
+        assert!(on.allows(Square, &straight_cross_square));
+        assert!(on.allows(Hexagon, &straight_cross_hexagon));
+    }
+
+    #[test]
+    fn only_two_through_tracks_can_make_a_bridge() {
+        assert_eq!(bridge_of(&[1, 2, 1, 2]), Some((0, 1)));
+        assert_eq!(bridge_of(&[1, 1, 0, 2, 2, 0]), None, "nothing crosses");
+        // A junction crossing a track can't be drawn as a bridge.
+        assert_eq!(bridge_of(&[1, 2, 1, 2, 0, 1]), None);
+        // Two crossings in one tile are too many.
+        assert_eq!(bridge_of(&[1, 2, 3, 1, 2, 3]), None);
+        let mut on = Clearance::new(TrackStyle::default()).with_crossings(true);
+        assert!(!on.allows(Hexagon, &[1, 2, 1, 2, 0, 1]));
+    }
+
+    #[test]
     fn report_how_many_states_are_allowed() {
         let mut clearance = Clearance::new(TrackStyle::default());
         for kind in [Triangle, Square, Hexagon] {
@@ -265,7 +405,15 @@ mod tests {
             if kind == Hexagon {
                 assert!(allowed > 100, "{kind:?}: {allowed} of {}", states.len());
             }
-            println!("{kind:?}: {allowed} of {} states allowed", states.len());
+            let mut bridges = Clearance::new(TrackStyle::default()).with_crossings(true);
+            let with_bridges = all_states_with_crossings(kind.sides())
+                .iter()
+                .filter(|s| is_crossing(s) && bridges.allows(kind, s))
+                .count();
+            println!(
+                "{kind:?}: {allowed} of {} states allowed, {with_bridges} with bridges",
+                states.len()
+            );
         }
     }
 }

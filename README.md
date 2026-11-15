@@ -14,8 +14,9 @@
 
 maze-hex is a sibling of [Lubra](https://github.com/daleobrien/lubra). It also
 makes winding tracks drawn in ink, but tracks only ever join a tile at the
-middle of an edge. No track passes over another, so there are no fragments to
-generate and no drawing order to worry about. Every edge in a tiling has the
+middle of an edge, so there are no fragments to generate. Tracks can still
+cross in tiles of four or more sides, as bridges, and each bridge is drawn
+inside its own tile, so there is no drawing order to worry about. Every edge in a tiling has the
 same length, so a track can pass from a hexagon to a square to a triangle with
 the same width.
 
@@ -53,7 +54,8 @@ make           # list every task
   or an arc round the point where two sides' lines meet. A table says which
   groupings of a tile's sides can be drawn without walls crowding.
 - `lib/src/maze/`: randomised Kruskal over the tracks' joins, keeping every
-  tile drawable, so a tile can carry two separate tracks without any crossing.
+  tile drawable, so a tile can carry two separate tracks, or a bridge where two
+  cross (`--crossings`, default 0.3).
 - `lib/src/render/`: walls chained across tiles into one continuous line,
   written as SVG.
 

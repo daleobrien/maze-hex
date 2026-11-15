@@ -15,10 +15,17 @@ pub use hub::Algorithm;
 
 use crate::rng::Rng;
 use crate::tiling::Tiling;
-use crate::track::clearance::{blocks_of, Clearance};
+use crate::track::clearance::{blocks_of, bridge_of, Clearance};
 use crate::track::curve::V2;
 use crate::track::face::FaceGeometry;
 use crate::track::TrackStyle;
+
+/// Two tracks crossing in one tile: indices into that tile's blocks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Bridge {
+    pub over: usize,
+    pub under: usize,
+}
 
 /// A dead end: the tile it is in and the side it is entered by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,6 +39,8 @@ pub struct Maze {
     pub tiling: Tiling,
     /// Per face, its blocks; each block lists its sides anticlockwise.
     pub blocks: Vec<Vec<Vec<usize>>>,
+    /// Per face, the bridge in it, if two of its tracks cross.
+    pub bridges: Vec<Option<Bridge>>,
     /// Per edge, whether a track crosses it.
     pub open: Vec<bool>,
     pub entrance: Cap,
@@ -67,7 +76,8 @@ impl Maze {
         // A separate stream from the tiling's, so changing one doesn't
         // reshuffle the other.
         let mut rng = Rng::new(options.seed ^ 0x6d61_7a65);
-        let mut clearance = Clearance::new(options.style);
+        let mut clearance =
+            Clearance::new(options.style).with_crossings(options.generate.crossings > 0.0);
         let generated = match options.generate.mode {
             Mode::PassThrough => {
                 generate::generate(&tiling, &mut clearance, &mut rng, &options.generate)
@@ -86,6 +96,20 @@ impl Maze {
             }
         }
 
+        // Which track of each bridge goes over: its own random numbers, so
+        // choosing doesn't disturb the maze itself.
+        let mut coin = Rng::new(options.seed ^ 0x6272_6964_6765);
+        let bridges: Vec<Option<Bridge>> = generated
+            .labels
+            .iter()
+            .map(|labels| {
+                bridge_of(labels).map(|(a, b)| {
+                    let (over, under) = if coin.chance(0.5) { (a, b) } else { (b, a) };
+                    Bridge { over, under }
+                })
+            })
+            .collect();
+
         let caps: Vec<Cap> = blocks
             .iter()
             .enumerate()
@@ -99,6 +123,7 @@ impl Maze {
         Some(Maze {
             tiling,
             blocks,
+            bridges,
             open,
             entrance,
             exit,
