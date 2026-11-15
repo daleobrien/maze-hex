@@ -2,7 +2,12 @@
 //! [`Tiling`], so a periodic unit cell and a random generator are interchangeable
 //! behind one trait and the command line can pick either by name.
 
-use super::{catalogue, merge::TriangleHexagon, Region, Tiling, UnitCell};
+use super::{
+    catalogue,
+    merge::TriangleHexagon,
+    rows::{RowMix, RowMixHexagon},
+    Region, Tiling, UnitCell,
+};
 use crate::rng::Rng;
 
 /// Something that can fill a region with tiles.
@@ -37,7 +42,7 @@ impl<T: TilingSource + ?Sized> TilingSource for &T {
 }
 
 /// The names of the free-mix generators, after the periodic tilings.
-const GENERATORS: [&str; 1] = ["triangle-hexagon"];
+const GENERATORS: [&str; 3] = ["triangle-hexagon", "row-mix", "row-mix-hexagon"];
 
 /// Every source name: the periodic tilings, then the generators.
 pub fn source_names() -> Vec<&'static str> {
@@ -55,6 +60,8 @@ pub fn source_by_name(name: &str) -> Option<Box<dyn TilingSource>> {
     }
     match name {
         "triangle-hexagon" => Some(Box::new(TriangleHexagon::default())),
+        "row-mix" => Some(Box::new(RowMix::default())),
+        "row-mix-hexagon" => Some(Box::new(RowMixHexagon::default())),
         _ => None,
     }
 }
