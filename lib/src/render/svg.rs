@@ -251,6 +251,27 @@ mod tests {
         assert!(a.starts_with("<svg") && a.trim_end().ends_with("</svg>"));
     }
 
+    /// FNV-1a, so the pinned output below needs no hashing crate.
+    fn fnv(text: &str) -> u64 {
+        text.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| {
+            (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3)
+        })
+    }
+
+    #[test]
+    fn plain_output_is_unchanged() {
+        // Taken from the plain renderer before ink existed, so adding ink
+        // cannot quietly alter `-P`.
+        let options = SvgOptions {
+            solution: true,
+            boundaries: true,
+            numbers: true,
+            ports: true,
+        };
+        let svg = render(&hex_maze(4), &options);
+        assert_eq!((svg.len(), fnv(&svg)), (17709, 0x1ff0_aff1_c4cc_6b7a));
+    }
+
     #[test]
     fn the_solution_is_one_unbroken_line() {
         let maze = hex_maze(5);

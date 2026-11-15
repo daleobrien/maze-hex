@@ -34,6 +34,9 @@ pub struct Maze {
     pub entrance: Cap,
     pub exit: Cap,
     pub style: TrackStyle,
+    /// The seed the maze grew from; the ink pen is seeded with it too, so one
+    /// number repeats the whole drawing.
+    pub seed: u64,
 }
 
 /// Everything that decides a maze, besides its tiling.
@@ -91,6 +94,7 @@ impl Maze {
             entrance,
             exit,
             style: options.style,
+            seed: options.seed,
         })
     }
 
