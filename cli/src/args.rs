@@ -2,7 +2,7 @@
 //! `lib`, so there is no argument parser to lean on; the flags are few enough
 //! that a match on each one stays easy to read.
 
-use lib::maze::GenerateOptions;
+use lib::maze::{Algorithm, GenerateOptions, Mode as TrackMode};
 use lib::tiling::source::source_by_name;
 use lib::tiling::Shape;
 use lib::track::TrackStyle;
@@ -64,6 +64,7 @@ impl Default for Options {
 pub fn parse(args: &[String]) -> Result<Options, String> {
     let mut options = Options::default();
     let mut rest = args.iter();
+    let mut algorithm_given = false;
     while let Some(arg) = rest.next() {
         match arg.as_str() {
             // Help returns at once, so `maze-hex --help` works even when the
@@ -113,11 +114,33 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
             "-T" | "--ports" => options.ports = true,
             "--track-width" => options.style.width = positive(arg, &mut rest)?,
             "--cap-depth" => options.style.cap_depth = at_least_zero(arg, &mut rest)?,
+            "--mode" => {
+                let name = value(arg, &mut rest)?;
+                options.generate.mode = match name {
+                    "hub" => TrackMode::Hub,
+                    "pass-through" => TrackMode::PassThrough,
+                    _ => return Err(format!("unknown mode '{name}' (use hub or pass-through)")),
+                };
+            }
+            "--algorithm" => {
+                let name = value(arg, &mut rest)?;
+                options.generate.algorithm = Algorithm::from_name(name).ok_or_else(|| {
+                    format!("unknown algorithm '{name}' (use wilson, backtracker, kruskal or prim)")
+                })?;
+                algorithm_given = true;
+            }
             "--pass-through" => options.generate.pass_through = fraction(arg, &mut rest)?,
             "--straightness" => options.generate.straightness = fraction(arg, &mut rest)?,
             other if other.starts_with('-') => return Err(format!("unknown flag '{other}'")),
             other => return Err(format!("unexpected argument '{other}'")),
         }
+    }
+    // Checked after the loop so the flags may come in either order.
+    if algorithm_given && options.generate.mode != TrackMode::Hub {
+        return Err(
+            "--algorithm only applies with --mode hub; pass-through mode has its own Kruskal over chords"
+                .to_string(),
+        );
     }
     Ok(options)
 }
@@ -200,6 +223,9 @@ usage: maze-hex [options]
   -T, --ports         draw a dot on every open port
   --track-width F     width of the track (default {track_width})
   --cap-depth F       how far a dead end reaches into its tile (default {cap_depth})
+  --mode MODE         pass-through or hub (default pass-through); hub puts one
+                      track block in each tile, so the maze spans every tile
+  --algorithm NAME    hub mode only: wilson, backtracker, kruskal or prim (default {algorithm})
   --pass-through F    how often a tile may take a second track, 0 to 1 (default {pass_through})
   --straightness F    preference for going straight through a tile, 0 to 1 (default {straightness})
   -h, --help          print this help and exit
@@ -210,6 +236,7 @@ usage: maze-hex [options]
         output = d.output,
         track_width = d.style.width,
         cap_depth = d.style.cap_depth,
+        algorithm = d.generate.algorithm.name(),
         pass_through = d.generate.pass_through,
         straightness = d.generate.straightness,
     )
@@ -237,6 +264,8 @@ mod tests {
         assert!(!o.solution && !o.boundaries && !o.numbers && !o.ports);
         assert_eq!(o.style.width, TrackStyle::default().width);
         assert_eq!(o.style.cap_depth, TrackStyle::default().cap_depth);
+        assert_eq!(o.generate.mode, TrackMode::PassThrough);
+        assert_eq!(o.generate.algorithm, Algorithm::Wilson);
         assert_eq!(
             o.generate.pass_through,
             GenerateOptions::default().pass_through
@@ -270,6 +299,10 @@ mod tests {
             "0.25",
             "--cap-depth",
             "0.5",
+            "--mode",
+            "hub",
+            "--algorithm",
+            "prim",
             "--pass-through",
             "0.2",
             "--straightness",
@@ -286,6 +319,8 @@ mod tests {
         assert!(o.solution && o.boundaries && o.numbers && o.ports);
         assert_eq!(o.style.width, 0.25);
         assert_eq!(o.style.cap_depth, 0.5);
+        assert_eq!(o.generate.mode, TrackMode::Hub);
+        assert_eq!(o.generate.algorithm, Algorithm::Prim);
         assert_eq!(o.generate.pass_through, 0.2);
         assert_eq!(o.generate.straightness, 1.0);
     }
@@ -404,6 +439,32 @@ mod tests {
     }
 
     #[test]
+    fn mode_and_algorithm_are_checked() {
+        let hub = parse_strs(&["--algorithm", "kruskal", "--mode", "hub"]).unwrap();
+        assert_eq!(hub.generate.algorithm, Algorithm::Kruskal);
+        assert_eq!(
+            parse_strs(&["--mode", "pass-through"])
+                .unwrap()
+                .generate
+                .mode,
+            TrackMode::PassThrough
+        );
+        assert!(parse_strs(&["--mode", "loop"])
+            .unwrap_err()
+            .contains("unknown mode 'loop'"));
+        assert!(parse_strs(&["--mode", "hub", "--algorithm", "dfs"])
+            .unwrap_err()
+            .contains("unknown algorithm 'dfs'"));
+        // Pass-through mode has no choice of algorithm, given or by default.
+        for args in [
+            &["--algorithm", "prim"][..],
+            &["--mode", "pass-through", "--algorithm", "prim"],
+        ] {
+            assert!(parse_strs(args).unwrap_err().contains("--mode hub"));
+        }
+    }
+
+    #[test]
     fn output_gets_an_svg_extension_once() {
         assert_eq!(output_path("maze"), "maze.svg");
         assert_eq!(output_path("maze.svg"), "maze.svg");
@@ -426,6 +487,8 @@ mod tests {
             "-T, --ports",
             "--track-width",
             "--cap-depth",
+            "--mode",
+            "--algorithm",
             "--pass-through",
             "--straightness",
             "-h, --help",
