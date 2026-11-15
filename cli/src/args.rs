@@ -32,6 +32,8 @@ pub struct Options {
     pub boundaries: bool,
     pub numbers: bool,
     pub ports: bool,
+    /// Even black walls instead of hand-drawn ink.
+    pub plain: bool,
     pub style: TrackStyle,
     pub generate: GenerateOptions,
 }
@@ -53,6 +55,7 @@ impl Default for Options {
             boundaries: false,
             numbers: false,
             ports: false,
+            plain: false,
             style: TrackStyle::default(),
             generate: GenerateOptions::default(),
         }
@@ -111,6 +114,7 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
             "-B" | "--boundaries" => options.boundaries = true,
             "-N" | "--numbers" => options.numbers = true,
             "-T" | "--ports" => options.ports = true,
+            "-P" | "--plain" => options.plain = true,
             "--track-width" => options.style.width = positive(arg, &mut rest)?,
             "--cap-depth" => options.style.cap_depth = at_least_zero(arg, &mut rest)?,
             "--pass-through" => options.generate.pass_through = fraction(arg, &mut rest)?,
@@ -198,6 +202,7 @@ usage: maze-hex [options]
   -B, --boundaries    draw faint tile outlines
   -N, --numbers       draw each tile's number
   -T, --ports         draw a dot on every open port
+  -P, --plain         even black walls instead of hand-drawn ink
   --track-width F     width of the track (default {track_width})
   --cap-depth F       how far a dead end reaches into its tile (default {cap_depth})
   --pass-through F    how often a tile may take a second track, 0 to 1 (default {pass_through})
@@ -230,6 +235,7 @@ mod tests {
         assert_eq!(o.mode, Mode::Generate);
         assert_eq!(o.tiling, "hexagonal");
         assert_eq!(o.seed, None);
+        assert!(!o.plain, "ink is the default");
         assert_eq!(o.width, 30.0);
         assert_eq!(o.height, 20.0);
         assert_eq!(o.shape, Shape::Rectangle);
@@ -266,6 +272,7 @@ mod tests {
             "-B",
             "-N",
             "-T",
+            "-P",
             "--track-width",
             "0.25",
             "--cap-depth",
@@ -283,7 +290,7 @@ mod tests {
         assert_eq!(o.height, 8.0);
         assert_eq!(o.shape, Shape::Circle);
         assert_eq!(o.output, "out");
-        assert!(o.solution && o.boundaries && o.numbers && o.ports);
+        assert!(o.solution && o.boundaries && o.numbers && o.ports && o.plain);
         assert_eq!(o.style.width, 0.25);
         assert_eq!(o.style.cap_depth, 0.5);
         assert_eq!(o.generate.pass_through, 0.2);
@@ -292,7 +299,10 @@ mod tests {
 
     #[test]
     fn short_forms_match_the_long_ones() {
-        let short = parse_strs(&["-W", "5", "-H", "6", "-o", "x", "-S", "-B", "-N", "-T"]).unwrap();
+        let short = parse_strs(&[
+            "-W", "5", "-H", "6", "-o", "x", "-S", "-B", "-N", "-T", "-P",
+        ])
+        .unwrap();
         let long = parse_strs(&[
             "--width",
             "5",
@@ -304,12 +314,14 @@ mod tests {
             "--boundaries",
             "--numbers",
             "--ports",
+            "--plain",
         ])
         .unwrap();
         assert_eq!(short.width, long.width);
         assert_eq!(short.height, long.height);
         assert_eq!(short.output, long.output);
         assert!(short.solution && short.boundaries && short.numbers && short.ports);
+        assert!(short.plain && long.plain);
     }
 
     #[test]
@@ -424,6 +436,7 @@ mod tests {
             "-B, --boundaries",
             "-N, --numbers",
             "-T, --ports",
+            "-P, --plain",
             "--track-width",
             "--cap-depth",
             "--pass-through",

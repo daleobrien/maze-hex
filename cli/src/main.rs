@@ -72,6 +72,7 @@ fn run(options: &Options) -> Result<(), String> {
             boundaries: options.boundaries,
             numbers: options.numbers,
             ports: options.ports,
+            plain: options.plain,
         },
     );
     let path = args::output_path(&options.output);
