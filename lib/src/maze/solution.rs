@@ -186,6 +186,31 @@ mod tests {
         }
     }
 
+    /// FNV-1a over the debug text of every tile's blocks.
+    fn fingerprint(maze: &Maze) -> u64 {
+        format!("{:?}", maze.blocks)
+            .bytes()
+            .fold(0xcbf2_9ce4_8422_2325, |h, b| {
+                (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+            })
+    }
+
+    #[test]
+    fn pass_through_mazes_are_unchanged_by_new_modes() {
+        // Values taken before hub mode existed, so adding a mode can't quietly
+        // reshuffle the default maze for a seed.
+        let pinned = [
+            ("hexagonal", 8780091197363656907u64),
+            ("square", 10172740568377355009),
+            ("triangular", 4386330192581049373),
+            ("snub-square", 16616791671595646887),
+            ("triangle-hexagon", 186290123505539694),
+        ];
+        for (name, want) in pinned {
+            assert_eq!(fingerprint(&maze(name, 3)), want, "{name}");
+        }
+    }
+
     #[test]
     fn the_same_seed_gives_the_same_maze() {
         let a = maze("hexagonal", 9);
