@@ -113,14 +113,66 @@ pub const ELONGATED_TRIANGULAR: UnitCell = UnitCell {
     ],
 };
 
+/// A point of the triangular lattice: `m` steps east and `n` steps at 60°.
+const fn lattice(m: i64, n: i64) -> Point {
+    Point::new(Q3::new(2 * m + n, 0), Q3::new(0, n))
+}
+
+/// 3.3.4.3.4: the snub square tiling. Two squares, turned 30° from each other,
+/// and four triangles in a cell. The lattice vectors are the 15° and 105°
+/// diagonals of two unit steps, because the squares sit at 0° and 30°.
+pub const SNUB_SQUARE: UnitCell = UnitCell {
+    name: "snub-square",
+    notation: "3.3.4.3.4",
+    a: walk(&[0, 1]),
+    b: walk(&[3, 4]),
+    tiles: &[
+        tile(Square, Point::ORIGIN, 0),
+        tile(Square, walk(&[0]), 10),
+        // The triangles round the first square: below, right, above and left.
+        tile(Triangle, walk(&[0]), 6),
+        tile(Triangle, walk(&[0, 3]), 9),
+        tile(Triangle, walk(&[3]), 0),
+        tile(Triangle, Point::ORIGIN, 3),
+    ],
+};
+
+/// 3.3.3.3.6: the snub hexagonal tiling, which comes in a left- and a
+/// right-handed form; this is one of them. It is the triangular tiling with one
+/// vertex in seven grown into a hexagon, so a cell holds one hexagon and eight
+/// triangles. The lattice vectors are `2·e0 + e60` and its turn by 60°, which
+/// have length √7. The triangles are the ones nearest the hexagon, so that
+/// clipping never misses a tile that starts outside its own cell.
+pub const SNUB_HEXAGONAL: UnitCell = UnitCell {
+    name: "snub-hexagonal",
+    notation: "3.3.3.3.6",
+    a: walk(&[0, 0, 2]),
+    b: walk(&[2, 2, 4]),
+    tiles: &[
+        tile(Hexagon, Point::ORIGIN, 0),
+        // Upward triangles, named by their lowest-left corner ...
+        tile(Triangle, lattice(1, 0), 0),
+        tile(Triangle, lattice(-1, 2), 0),
+        tile(Triangle, lattice(0, 2), 0),
+        tile(Triangle, lattice(-1, 0), 0),
+        // ... and downward ones, starting at their right-hand corner.
+        tile(Triangle, lattice(-1, 2), 2),
+        tile(Triangle, lattice(1, -1), 2),
+        tile(Triangle, lattice(-1, 1), 2),
+        tile(Triangle, lattice(1, 1), 2),
+    ],
+};
+
 /// Every tiling, in the order the documents show them.
-pub const ALL: [&UnitCell; 6] = [
+pub const ALL: [&UnitCell; 8] = [
     &HEXAGONAL,
     &SQUARE,
     &TRIANGULAR,
     &TRIHEXAGONAL,
     &RHOMBITRIHEXAGONAL,
     &ELONGATED_TRIANGULAR,
+    &SNUB_SQUARE,
+    &SNUB_HEXAGONAL,
 ];
 
 /// The tiling called `name`, if there is one.

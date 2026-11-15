@@ -1,14 +1,23 @@
 //! Tilings: tiles (faces), the edges between them and the vertices they share.
 //!
-//! A tiling is built from a [`UnitCell`] repeated over a rectangle and then
-//! clipped: a tile is kept when its centre lies inside the rectangle, and only
-//! the largest group of tiles joined edge to edge is kept, so the maze has no
-//! stray islands. Edges and vertices are shared between neighbouring tiles by
+//! A tiling is built from a [`UnitCell`] repeated over a [`Region`] and then
+//! clipped: a tile is kept when its centre lies inside the region, tiles that
+//! hang on by a single edge are dropped, and only the largest group of tiles
+//! joined edge to edge is kept, so the maze has no stray islands. Edges and vertices are shared between neighbouring tiles by
 //! their exact coordinates.
 
 pub mod catalogue;
+pub mod merge;
+mod region;
+pub mod source;
+
+#[cfg(test)]
+mod checks;
 
 use std::collections::{HashMap, VecDeque};
+
+pub use region::{Region, Shape};
+pub use source::TilingSource;
 
 use crate::geometry::{Direction, Point};
 
@@ -124,26 +133,87 @@ pub struct Tiling {
     pub edges: Vec<Edge>,
 }
 
-/// The rectangle a tiling fills, in edge lengths, from the origin.
-#[derive(Clone, Copy, Debug)]
-pub struct Region {
-    pub width: f64,
-    pub height: f64,
-}
-
 impl Tiling {
     /// Repeats `cell` over `region` and keeps the tiles whose centres are inside.
     pub fn build(cell: &UnitCell, region: Region) -> Tiling {
-        let mut builder = Builder::default();
+        let mut faces = Vec::new();
         for offset in lattice_offsets(cell, region) {
             for prototile in cell.tiles {
                 let vertices = prototile.vertices(offset);
                 if centre_is_inside(&vertices, region) {
-                    builder.add_face(prototile.kind, &vertices);
+                    faces.push((prototile.kind, vertices));
                 }
             }
         }
-        builder.finish().largest_component()
+        Tiling::from_faces(&faces, region.smooth)
+    }
+
+    /// Stitches `faces` (each tile's vertices, anticlockwise) into a tiling by
+    /// their exact positions and keeps the largest piece. With `smooth`, tiles
+    /// that hang on by one edge are dropped first (see [`Tiling::smoothed`]).
+    /// Every generator goes through here, so none of them repeats the stitching.
+    pub(crate) fn from_faces(faces: &[(PolygonKind, Vec<Point>)], smooth: bool) -> Tiling {
+        let mut builder = Builder::default();
+        for (kind, vertices) in faces {
+            builder.add_face(*kind, vertices);
+        }
+        let mut tiling = builder.finish();
+        if smooth {
+            tiling = tiling.smoothed();
+        }
+        tiling.largest_component()
+    }
+
+    /// Every tile as its shape and exact vertices, the form `from_faces` takes.
+    pub(crate) fn polygons(&self) -> Vec<(PolygonKind, Vec<Point>)> {
+        self.faces
+            .iter()
+            .map(|face| {
+                let vertices = face.vertices.iter().map(|&v| self.points[v]).collect();
+                (face.kind, vertices)
+            })
+            .collect()
+    }
+
+    /// Repeatedly drops tiles with at most one neighbour. Clipping leaves such
+    /// spiky tiles on the edge of tilings like 3.4.6.4; a track could only ever
+    /// enter one and stop, and they make the outline look ragged. Removing one
+    /// can expose another, so this runs until none are left.
+    fn smoothed(self) -> Tiling {
+        let mut degree: Vec<usize> = (0..self.faces.len())
+            .map(|face| self.neighbours(face).count())
+            .collect();
+        let mut removed = vec![false; self.faces.len()];
+        let mut queue: Vec<usize> = (0..self.faces.len()).filter(|&f| degree[f] <= 1).collect();
+        while let Some(face) = queue.pop() {
+            if removed[face] {
+                continue;
+            }
+            removed[face] = true;
+            for next in self.neighbours(face) {
+                if !removed[next.face] {
+                    degree[next.face] -= 1;
+                    if degree[next.face] <= 1 {
+                        queue.push(next.face);
+                    }
+                }
+            }
+        }
+        if !removed.contains(&true) {
+            return self;
+        }
+        let kept: Vec<_> = self
+            .polygons()
+            .into_iter()
+            .zip(&removed)
+            .filter(|(_, &gone)| !gone)
+            .map(|(polygon, _)| polygon)
+            .collect();
+        let mut builder = Builder::default();
+        for (kind, vertices) in &kept {
+            builder.add_face(*kind, vertices);
+        }
+        builder.finish()
     }
 
     /// The centre of a face, for drawing.
@@ -242,8 +312,7 @@ fn centre_is_inside(vertices: &[Point], region: Region) -> bool {
         .iter()
         .map(|p| p.to_f64())
         .fold((0.0, 0.0), |(sx, sy), (x, y)| (sx + x, sy + y));
-    let (x, y) = (sx / n, sy / n);
-    (0.0..=region.width).contains(&x) && (0.0..=region.height).contains(&y)
+    region.contains(sx / n, sy / n)
 }
 
 /// Joins faces into a tiling, sharing vertices and edges by exact position.
@@ -304,10 +373,7 @@ impl Builder {
 mod tests {
     use super::*;
 
-    const REGION: Region = Region {
-        width: 16.0,
-        height: 12.0,
-    };
+    const REGION: Region = Region::rectangle(16.0, 12.0);
 
     fn polygon_area(points: &[(f64, f64)]) -> f64 {
         let n = points.len();
@@ -425,6 +491,131 @@ mod tests {
             }
             assert!(seen.iter().all(|&s| s), "{}", cell.name);
         }
+    }
+
+    #[test]
+    fn smoothing_leaves_no_tile_with_fewer_than_two_neighbours() {
+        for cell in catalogue::ALL {
+            let rough = Tiling::build(cell, REGION.without_smoothing());
+            let smooth = Tiling::build(cell, REGION);
+            for face in 0..smooth.faces.len() {
+                assert!(
+                    smooth.neighbours(face).count() >= 2,
+                    "{}: face {face}",
+                    cell.name
+                );
+            }
+            assert!(smooth.faces.len() <= rough.faces.len());
+            // Smoothing trims only a ragged fringe, never a large part.
+            assert!(
+                smooth.faces.len() * 10 >= rough.faces.len() * 9,
+                "{}: {} of {} survive",
+                cell.name,
+                smooth.faces.len(),
+                rough.faces.len()
+            );
+        }
+    }
+
+    #[test]
+    fn smoothing_removes_something_from_the_spiky_tilings() {
+        for cell in [&catalogue::TRIHEXAGONAL, &catalogue::RHOMBITRIHEXAGONAL] {
+            let rough = Tiling::build(cell, REGION.without_smoothing());
+            let smooth = Tiling::build(cell, REGION);
+            assert!(smooth.faces.len() < rough.faces.len(), "{}", cell.name);
+        }
+    }
+
+    #[test]
+    fn shaped_regions_keep_only_tiles_inside_and_stay_valid() {
+        let region = Region::rectangle(20.0, 16.0);
+        for cell in catalogue::ALL {
+            let full = Tiling::build(cell, region).faces.len();
+            for shape in [Shape::Hexagon, Shape::Circle] {
+                let shaped = region.with_shape(shape);
+                let tiling = Tiling::build(cell, shaped);
+                let label = format!("{} {shape:?}", cell.name);
+                checks::assert_valid(&tiling, &label);
+                assert!(tiling.faces.len() < full, "{label}");
+                assert!(tiling.faces.len() * 4 > full, "{label}");
+                for face in 0..tiling.faces.len() {
+                    let (x, y) = tiling.centre(face);
+                    assert!(shaped.contains(x, y), "{label}: face {face}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_circle_and_hexagon_are_centred_in_the_box() {
+        let region = Region::rectangle(24.0, 16.0);
+        for shape in [Shape::Hexagon, Shape::Circle] {
+            let shaped = region.with_shape(shape);
+            assert!(shaped.contains(12.0, 8.0));
+            assert!(!shaped.contains(1.0, 1.0), "{shape:?} corner");
+            // Limited by the height, so it touches the top and bottom, not the sides.
+            assert!(shaped.contains(12.0, 0.1) && shaped.contains(12.0, 15.9));
+            assert!(!shaped.contains(0.5, 8.0), "{shape:?} left edge");
+        }
+        // A hexagon reaches the corners of its box along the middle row.
+        let tall = Region::rectangle(10.0, 40.0).with_shape(Shape::Hexagon);
+        assert!(tall.contains(0.1, 20.0) && tall.contains(9.9, 20.0));
+    }
+
+    #[test]
+    fn every_periodic_tiling_has_its_declared_vertex_configuration() {
+        for cell in catalogue::ALL {
+            let declared: Vec<u8> = cell
+                .notation
+                .split('.')
+                .map(|n| n.parse().expect("notation is numbers"))
+                .collect();
+            let tiling = Tiling::build(cell, Region::rectangle(20.0, 16.0));
+            let mut round: Vec<Vec<(u8, u8)>> = vec![Vec::new(); tiling.points.len()];
+            let mut on_boundary = vec![false; tiling.points.len()];
+            for edge in tiling.edges.iter().filter(|e| !e.is_interior()) {
+                for v in edge.vertices {
+                    on_boundary[v] = true;
+                }
+            }
+            for face in &tiling.faces {
+                let n = face.vertices.len();
+                for i in 0..n {
+                    // A tile fills the angle just anticlockwise of its outgoing
+                    // edge, so sorting by that edge's direction gives the order
+                    // round the vertex, exactly.
+                    let out =
+                        tiling.points[face.vertices[(i + 1) % n]] - tiling.points[face.vertices[i]];
+                    let steps = out.as_unit_direction().expect("unit edge").steps();
+                    round[face.vertices[i]].push((steps, face.kind.sides() as u8));
+                }
+            }
+            let mut checked = 0;
+            for (v, mut tiles) in round.into_iter().enumerate() {
+                if on_boundary[v] {
+                    continue;
+                }
+                tiles.sort();
+                let seen: Vec<u8> = tiles.into_iter().map(|(_, sides)| sides).collect();
+                assert!(
+                    same_cycle(&seen, &declared),
+                    "{}: vertex {v} has {seen:?}, not {declared:?}",
+                    cell.name
+                );
+                checked += 1;
+            }
+            assert!(checked > 10, "{}", cell.name);
+        }
+    }
+
+    /// Whether `a` is `b` read from another start, or backwards.
+    fn same_cycle(a: &[u8], b: &[u8]) -> bool {
+        let n = a.len();
+        let reversed: Vec<u8> = b.iter().rev().copied().collect();
+        n == b.len()
+            && [b, &reversed[..]]
+                .iter()
+                .any(|other| (0..n).any(|shift| (0..n).all(|i| a[i] == other[(i + shift) % n])))
     }
 
     #[test]
