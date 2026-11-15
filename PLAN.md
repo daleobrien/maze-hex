@@ -65,7 +65,7 @@ edges. ✅ means it is in `lib/src/tiling/catalogue.rs` and passes the tests now
 | Random triangle–hexagon mix | – | triangle + hexagon | ✅ `triangle-hexagon` |
 | Random rows of squares and triangles, with hexagon merges | – | all three | ✅ `row-mix`, `row-mix-hexagon` |
 | Square–triangle quasicrystal, with hexagon merges | 12-fold | all three | phase 4, still to do (§2.1; inflation by 2+√3, still exact) |
-| Grown mix with a chosen ratio | – | all three | phase 8 (§2.1) |
+| Grown mix with a chosen ratio | – | all three | ✅ `random` (`grow.rs`, `--mix T,S,H`) |
 | 2-uniform tilings (the 20 using 3/4/6) | e.g. [3⁶; 3².4.3.4] | mixed | phase 8 |
 | Rhombus / house-pentagon tilings | – | equilateral, 30° angles | phase 8 |
 
