@@ -56,15 +56,15 @@ edges. ✅ means it is in `lib/src/tiling/catalogue.rs` and passes the tests now
 | Trihexagonal | 3.6.3.6 | hexagon + triangle | ✅ |
 | Rhombitrihexagonal | 3.4.6.4 | hexagon + square + triangle | ✅ |
 | Elongated triangular | 3.3.3.4.4 | square + triangle | ✅ |
-| Snub square | 3.3.4.3.4 | square + triangle | phase 3 |
-| Snub hexagonal | 3.3.3.3.6 | hexagon + triangle (chiral) | phase 3 |
-| Random triangle–hexagon mix | – | triangle + hexagon | phase 4 (§2.1) |
+| Snub square | 3.3.4.3.4 | square + triangle | ✅ |
+| Snub hexagonal | 3.3.3.3.6 | hexagon + triangle (chiral) | ✅ |
+| Random triangle–hexagon mix | – | triangle + hexagon | ✅ `triangle-hexagon` |
 | Square–triangle quasicrystal, with hexagon merges | 12-fold | all three | phase 4 (§2.1; inflation by 2+√3, still exact) |
 | Grown mix with a chosen ratio | – | all three | phase 8 (§2.1) |
 | 2-uniform tilings (the 20 using 3/4/6) | e.g. [3⁶; 3².4.3.4] | mixed | phase 8 |
 | Rhombus / house-pentagon tilings | – | equilateral, 30° angles | phase 8 |
 
-![The six tilings built so far](docs/tilings.png)
+![The tilings built so far](docs/tilings.png)
 
 *`make tilings` draws these into `docs/tilings/`. The red dots are the ports:
 the middles of edges a track may cross.*
@@ -226,7 +226,14 @@ tilings need nothing extra.
 
 The algorithm is randomised Kruskal over all chords. Accept a chord if its two
 ports are in different trees (so no loop forms), it crosses nothing already in
-its tile, and the tile still passes clearance. Then come the repair passes,
+its tile, and the tile still passes clearance.
+
+*As built:* the first two sweeps also refuse a chord if a neighbour couldn't
+draw the dead end it would gain. In triangles and squares that alone
+deadlocks (two neighbouring tracks can never meet), so later sweeps skip that
+check and a repair pass joins each crowded dead end into a track from another
+tree, or cuts it back. Dead ends are short stubs (`cap_depth`, 0.3) so they
+leave room for other tracks in the tile. Then come the repair passes,
 which are smaller cousins of Lubra's:
 
 1. **Join**: if more than one tree remains, merge two blocks that are next
@@ -395,10 +402,10 @@ Each phase ends with `make lint` clean: no build warnings, `cargo fmt`, and
 | # | Phase | Delivers | Done when |
 | - | ----- | -------- | --------- |
 | 0 | Scaffold ✅ | workspace, Makefile, CI, README, this plan | `make lint test` passes |
-| 1 | Geometry and tilings ✅ (mostly) | exact Q(√3), 6 unit cells, clipping, `make tilings`; **still to do:** the `TilingSource` trait, boundary smoothing (drop spiky one-neighbour tiles), region shapes (rectangle, hexagon, circle) | the tests below pass |
-| 2 | First hex maze, pass-through | `blocks.rs` with the clearance table, `kruskal.rs` with the repair passes, `render/curves.rs`, `walls.rs`, plain `svg.rs`, `cli` with `--seed -W -H -o -S -B -N -T` | `make maze` draws a hexagon maze with some two-track tiles and its solution; the same seed gives the same maze; no wall is closer than `m` |
-| 3 | Every periodic tiling, and hub mode | the maze on all catalogue tilings plus snub square and snub hexagonal; `--mode hub` with Wilson and backtracker | every tiling draws in both modes; tree and containment tests pass on all of them |
-| 4 | Free mixes | `merge.rs` (triangles to hexagons, `--hexagons`), `substitute.rs` (square–triangle inflation, then merge) | random mixes of all three shapes draw cleanly; every maze test also runs on them |
+| 1 | Geometry and tilings ✅ | exact Q(√3), unit cells, clipping, `make tilings`, the `TilingSource` trait, boundary smoothing, region shapes (rectangle, hexagon, circle) | the tests below pass |
+| 2 | First hex maze, pass-through ✅ | `blocks.rs` with the clearance table, `kruskal.rs` with the repair passes, `render/curves.rs`, `walls.rs`, plain `svg.rs`, `cli` with `--seed -W -H -o -S -B -N -T` | `make maze` draws a hexagon maze with some two-track tiles and its solution; the same seed gives the same maze; no wall is closer than `m` |
+| 3 | Every periodic tiling, and hub mode | ✅ the maze on all catalogue tilings plus snub square and snub hexagonal; **still to do:** `--mode hub` with Wilson and backtracker | every tiling draws in both modes; tree and containment tests pass on all of them |
+| 4 | Free mixes | ✅ `merge.rs` (triangles to hexagons); **still to do:** `--hexagons` on the CLI, `substitute.rs` (square–triangle inflation, then merge) | random mixes of all three shapes draw cleanly; every maze test also runs on them |
 | 5 | Ink | copy `ink.rs` from Lubra (pen wobble, width wander, red pencil solution), chained strokes, `-P` plain | ink mazes look like Lubra's; walls are one continuous line |
 | 6 | Outputs and web | `png` feature, wasm build, `--plotter`; add `?maze=hex` to maze.do.id.au as a third wasm, next to the maze-rs and Lubra ones | playable at maze.do.id.au; S3 deploy via the existing GitHub Action |
 | 7 | Documents | README in Lubra's style (cover image, Play link, quick start, documents table), `docs/drawing.md`, `docs/settings.md`, Typst design notes with every tiling, curve case and allowed state | `make doc` builds the PDFs |

@@ -21,7 +21,7 @@ help:
 	@echo "  make tilings  draw every tiling in the catalogue into docs/tilings/"
 	@echo "  make cli      run the maze-hex command in cli/ (CLI_ARGS to change its flags)"
 	@echo "  make maze     time one run of maze-hex (MAZE_ARGS to change its flags)"
-	@echo "  make sample   write docs/sample.svg and docs/sample-solved.svg"
+	@echo "  make sample   write docs/sample.svg, docs/sample-solved.svg and docs/sample-mixed.svg"
 
 build:
 	$(CARGO) build --workspace
@@ -50,3 +50,4 @@ maze:
 sample:
 	$(CARGO) run --release -p cli -- $(SAMPLE_ARGS) -o docs/sample
 	$(CARGO) run --release -p cli -- $(SAMPLE_ARGS) -S -o docs/sample-solved
+	$(CARGO) run --release -p cli -- $(SAMPLE_ARGS) --tiling triangle-hexagon -S -o docs/sample-mixed

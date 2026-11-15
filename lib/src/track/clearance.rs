@@ -18,7 +18,7 @@ use super::TrackStyle;
 use crate::tiling::PolygonKind;
 
 /// How finely walls are sampled for the check.
-const SAMPLE_STEP: f64 = 0.01;
+const SAMPLE_STEP: f64 = 0.02;
 
 /// The blocks of a state: each block's sides, anticlockwise. `labels[i]` is
 /// side `i`'s block (any non-zero number) or 0 if the side is closed.
@@ -144,9 +144,14 @@ impl Clearance {
                 }
             }
         }
-        // Clear of each other.
+        // Clear of each other. Walls whose bounding boxes are already far
+        // apart are skipped; this check is most of the cost of a new state.
+        let boxes: Vec<(V2, V2)> = samples.iter().map(|points| bounds(points)).collect();
         for i in 0..samples.len() {
             for j in i + 1..samples.len() {
+                if box_gap(boxes[i], boxes[j]) >= style.gap {
+                    continue;
+                }
                 if samples[i]
                     .iter()
                     .any(|&p| distance_to_polyline(p, &samples[j]) < style.gap)
@@ -157,6 +162,26 @@ impl Clearance {
         }
         true
     }
+}
+
+/// The smallest box holding every point.
+fn bounds(points: &[V2]) -> (V2, V2) {
+    points.iter().fold(
+        (V2::new(f64::MAX, f64::MAX), V2::new(f64::MIN, f64::MIN)),
+        |(lo, hi), p| {
+            (
+                V2::new(lo.x.min(p.x), lo.y.min(p.y)),
+                V2::new(hi.x.max(p.x), hi.y.max(p.y)),
+            )
+        },
+    )
+}
+
+/// How far apart two boxes are (0 if they overlap).
+fn box_gap((alo, ahi): (V2, V2), (blo, bhi): (V2, V2)) -> f64 {
+    let dx = (blo.x - ahi.x).max(alo.x - bhi.x).max(0.0);
+    let dy = (blo.y - ahi.y).max(alo.y - bhi.y).max(0.0);
+    dx.hypot(dy)
 }
 
 #[cfg(test)]

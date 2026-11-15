@@ -155,10 +155,8 @@ impl State<'_> {
             return false;
         }
 
-        let mut opened = self.open.clone();
-        opened[ea] = true;
-        opened[eb] = true;
-        let open = |e: usize| opened[e];
+        let was_open = &self.open;
+        let open = |e: usize| was_open[e] || e == ea || e == eb;
         let kind = face.kind;
         let labels = self.labels(chord.face, &open, &chords);
         if !self.clearance.allows(kind, &labels) {
