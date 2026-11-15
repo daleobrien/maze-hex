@@ -9,6 +9,7 @@
 pub mod catalogue;
 pub mod merge;
 mod region;
+pub mod rows;
 pub mod source;
 
 #[cfg(test)]
