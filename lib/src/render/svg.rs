@@ -1,4 +1,5 @@
-//! Plain SVG output: even black walls, a red route and red end markers.
+//! SVG output: hand-drawn ink by default, or with `plain` even black walls. Either
+//! way a red route and red end markers.
 //!
 //! Everything inside the flipped group is in maze coordinates scaled to
 //! pixels, with `y` pointing up; only text is placed outside it, so it isn't
@@ -6,7 +7,8 @@
 
 use std::fmt::Write;
 
-use super::walls::wall_strokes;
+use super::ink::{self, Pen, Point};
+use super::walls::{wall_strokes, Stroke};
 use crate::maze::Maze;
 use crate::track::curve::{Curve, V2};
 use crate::track::face::FaceGeometry;
@@ -22,6 +24,8 @@ pub struct SvgOptions {
     pub numbers: bool,
     /// A dot on every open port (`-T`).
     pub ports: bool,
+    /// Even black walls instead of hand-drawn ink (`-P`).
+    pub plain: bool,
 }
 
 /// Pixels per edge length.
@@ -30,6 +34,8 @@ const PADDING: f64 = 20.0;
 const WALL: &str = "#1d1d1d";
 const RED: &str = "#c0392b";
 const INK: &str = "#2b2118";
+/// The faint paper behind an ink drawing; the tracks are white on it.
+const PAPER_BACKGROUND: &str = "#f7f2e8";
 
 /// Maps maze coordinates to the flipped group's pixels.
 struct Frame {
@@ -70,6 +76,37 @@ impl Frame {
     fn screen(&self, p: V2) -> V2 {
         let q = self.at(p);
         V2::new(q.x, self.height - q.y)
+    }
+
+    /// A wall stroke sampled into pixel points for the ink pen. A closed
+    /// stroke does not repeat its first point, so each point is visited once.
+    fn polyline(&self, stroke: &Stroke) -> Vec<Point> {
+        let mut points = self.sampled(&stroke.curves);
+        if stroke.closed && points.len() > 1 {
+            let (first, last) = (points[0], points[points.len() - 1]);
+            if (first.0 - last.0).hypot(first.1 - last.1) < 1e-6 {
+                points.pop();
+            }
+        }
+        points
+    }
+
+    /// Curves joined end to end as pixel points no more than `ink::STEP` apart.
+    fn sampled(&self, curves: &[Curve]) -> Vec<Point> {
+        let mut points: Vec<Point> = Vec::new();
+        for curve in curves {
+            for p in curve.sample(ink::STEP / SCALE) {
+                let q = self.at(p);
+                // A curve starts where the last one ended; keep that point once.
+                let same = points
+                    .last()
+                    .is_some_and(|&(x, y)| (x - q.x).hypot(y - q.y) < 1e-6);
+                if !same {
+                    points.push((q.x, q.y));
+                }
+            }
+        }
+        points
     }
 
     /// SVG path data for curves joined end to end.
@@ -122,8 +159,30 @@ pub fn render(maze: &Maze, options: &SvgOptions) -> String {
         svg,
         "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 {w:.1} {h:.1}' width='{w:.0}' height='{h:.0}'>"
     );
-    let _ = writeln!(svg, "<rect width='100%' height='100%' fill='white'/>");
+    let background = if options.plain {
+        "white"
+    } else {
+        PAPER_BACKGROUND
+    };
+    let _ = writeln!(
+        svg,
+        "<rect width='100%' height='100%' fill='{background}'/>"
+    );
     let _ = writeln!(svg, "<g transform='translate(0,{h:.2}) scale(1,-1)'>");
+
+    let strokes = wall_strokes(maze);
+    // The pen is seeded from the maze, so one seed repeats the whole drawing.
+    let pen = Pen::new(maze.seed);
+    let loops: Vec<Vec<Point>> = strokes
+        .iter()
+        .filter(|s| s.closed)
+        .map(|s| frame.polyline(s))
+        .collect();
+    if !options.plain {
+        // Each closed wall stroke is the outline of one tree of track, so its
+        // inside is the track and is painted white before anything else.
+        svg.push_str(&ink::fill_markup(&loops, &pen));
+    }
 
     if options.boundaries {
         let _ = writeln!(svg, "<g fill='none' stroke='#cfcfcf' stroke-width='0.8'>");
@@ -157,35 +216,51 @@ pub fn render(maze: &Maze, options: &SvgOptions) -> String {
         svg.push_str("</g>\n");
     }
 
-    let walls: Vec<String> = wall_strokes(maze)
-        .iter()
-        .map(|s| frame.path(&s.curves, s.closed))
-        .collect();
-    let _ = writeln!(
-        svg,
-        "<path fill='none' stroke='{WALL}' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round' d='{}'/>",
-        walls.join("")
-    );
+    if options.plain {
+        let walls: Vec<String> = strokes
+            .iter()
+            .map(|s| frame.path(&s.curves, s.closed))
+            .collect();
+        let _ = writeln!(
+            svg,
+            "<path fill='none' stroke='{WALL}' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round' d='{}'/>",
+            walls.join("")
+        );
+    } else {
+        let lines: Vec<(Vec<Point>, bool)> = strokes
+            .iter()
+            .map(|s| (frame.polyline(s), s.closed))
+            .collect();
+        svg.push_str(&ink::wall_markup(&lines, &pen));
+    }
 
     if options.solution {
         let route = solution_curves(maze);
-        let _ = writeln!(
-            svg,
-            "<path fill='none' stroke='{RED}' stroke-opacity='0.85' stroke-width='{:.2}' stroke-linejoin='round' stroke-linecap='round' d='{}'/>",
-            maze.style.width * SCALE * 0.3,
-            frame.path(&route, false)
-        );
+        if options.plain {
+            let _ = writeln!(
+                svg,
+                "<path fill='none' stroke='{RED}' stroke-opacity='0.85' stroke-width='{:.2}' stroke-linejoin='round' stroke-linecap='round' d='{}'/>",
+                maze.style.width * SCALE * 0.3,
+                frame.path(&route, false)
+            );
+        } else {
+            svg.push_str(&ink::pencil_markup(&frame.sampled(&route), &pen));
+        }
     }
 
-    for cap in [maze.entrance, maze.exit] {
-        let c = frame.at(maze.cap_centre(cap));
-        let _ = writeln!(
-            svg,
-            "<circle cx='{:.2}' cy='{:.2}' r='{:.2}' fill='{RED}' stroke='{INK}' stroke-width='1.5'/>",
-            c.x,
-            c.y,
-            maze.style.width * SCALE * 0.38
-        );
+    let caps = [maze.entrance, maze.exit].map(|cap| frame.at(maze.cap_centre(cap)));
+    let marker = maze.style.width * SCALE * 0.38;
+    if options.plain {
+        for c in caps {
+            let _ = writeln!(
+                svg,
+                "<circle cx='{:.2}' cy='{:.2}' r='{marker:.2}' fill='{RED}' stroke='{INK}' stroke-width='1.5'/>",
+                c.x, c.y
+            );
+        }
+    } else {
+        let centres: Vec<Point> = caps.iter().map(|c| (c.x, c.y)).collect();
+        svg.push_str(&ink::dot_markup(&centres, marker, &pen));
     }
     svg.push_str("</g>\n");
 
@@ -245,6 +320,7 @@ mod tests {
             boundaries: true,
             numbers: true,
             ports: true,
+            plain: false,
         };
         let a = render(&hex_maze(4), &options);
         assert_eq!(a, render(&hex_maze(4), &options));
@@ -259,6 +335,43 @@ mod tests {
     }
 
     #[test]
+    fn ink_is_the_default_and_follows_the_seed() {
+        assert!(!SvgOptions::default().plain);
+        let options = SvgOptions {
+            solution: true,
+            ..SvgOptions::default()
+        };
+        let ink = render(&hex_maze(4), &options);
+        assert!(ink.starts_with("<svg") && ink.trim_end().ends_with("</svg>"));
+        assert_eq!(ink.matches("<svg").count(), 1);
+        assert_eq!(ink.matches("</svg>").count(), 1);
+        assert_eq!(ink, render(&hex_maze(4), &options));
+        let plain = SvgOptions {
+            plain: true,
+            ..options
+        };
+        assert_ne!(ink, render(&hex_maze(4), &plain));
+        // The same tiling with another seed, and the same maze with another
+        // pen seed, both draw differently.
+        assert_ne!(ink, render(&hex_maze(5), &options));
+        let mut other_pen = hex_maze(4);
+        other_pen.seed = 99;
+        assert_ne!(ink, render(&other_pen, &options));
+    }
+
+    #[test]
+    fn ink_overlays_still_draw() {
+        let options = SvgOptions {
+            boundaries: true,
+            numbers: true,
+            ports: true,
+            ..SvgOptions::default()
+        };
+        let svg = render(&hex_maze(3), &options);
+        assert!(svg.contains("<polygon") && svg.contains("<text") && svg.contains("<circle"));
+    }
+
+    #[test]
     fn plain_output_is_unchanged() {
         // Taken from the plain renderer before ink existed, so adding ink
         // cannot quietly alter `-P`.
@@ -267,6 +380,7 @@ mod tests {
             boundaries: true,
             numbers: true,
             ports: true,
+            plain: true,
         };
         let svg = render(&hex_maze(4), &options);
         assert_eq!((svg.len(), fnv(&svg)), (17709, 0x1ff0_aff1_c4cc_6b7a));
