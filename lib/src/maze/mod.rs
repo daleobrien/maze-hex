@@ -4,11 +4,14 @@
 //! end; a block of two is a bend or a straight; three or more make a junction.
 //! A tile may hold several blocks as long as they don't cross (pass-through).
 //! Together the blocks form a single tree: one route between any two places.
+//! Hub mode is the special case of one block per tile.
 
 mod generate;
+mod hub;
 pub mod solution;
 
-pub use generate::GenerateOptions;
+pub use generate::{GenerateOptions, Mode};
+pub use hub::Algorithm;
 
 use crate::rng::Rng;
 use crate::tiling::Tiling;
@@ -62,7 +65,13 @@ impl Maze {
         // reshuffle the other.
         let mut rng = Rng::new(options.seed ^ 0x6d61_7a65);
         let mut clearance = Clearance::new(options.style);
-        let generated = generate::generate(&tiling, &mut clearance, &mut rng, &options.generate);
+        let generated = match options.generate.mode {
+            Mode::PassThrough => {
+                generate::generate(&tiling, &mut clearance, &mut rng, &options.generate)
+            }
+            // Every single-block tile is drawable, so hub mode needs no clearance.
+            Mode::Hub => hub::generate(&tiling, &mut rng, &options.generate),
+        };
 
         let blocks: Vec<Vec<Vec<usize>>> = generated.labels.iter().map(|l| blocks_of(l)).collect();
         let mut open = vec![false; tiling.edges.len()];

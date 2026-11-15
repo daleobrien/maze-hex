@@ -7,13 +7,27 @@
 //! Every intermediate state is therefore drawable, and the result is a forest.
 //! The largest tree is kept; any others are cleared, leaving blank tiles.
 
+use super::hub::Algorithm;
 use crate::rng::Rng;
 use crate::tiling::Tiling;
 use crate::track::clearance::Clearance;
 
+/// How tracks may share a tile.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Mode {
+    /// A tile may hold several separate tracks (PLAN §4.1).
+    #[default]
+    PassThrough,
+    /// A tile holds one block of all its open sides (PLAN §4.2).
+    Hub,
+}
+
 /// Settings for the generator.
 #[derive(Clone, Copy, Debug)]
 pub struct GenerateOptions {
+    pub mode: Mode,
+    /// Which spanning-tree algorithm hub mode uses; pass-through has its own.
+    pub algorithm: Algorithm,
     /// How often a tile that already holds a track may take a second, separate
     /// one (0 never, 1 whenever it fits).
     pub pass_through: f64,
@@ -24,6 +38,8 @@ pub struct GenerateOptions {
 impl Default for GenerateOptions {
     fn default() -> Self {
         GenerateOptions {
+            mode: Mode::PassThrough,
+            algorithm: Algorithm::Wilson,
             pass_through: 0.7,
             straightness: 0.3,
         }
@@ -37,18 +53,18 @@ pub(super) struct Generated {
 }
 
 /// A disjoint-set forest over ports.
-struct UnionFind {
+pub(super) struct UnionFind {
     parent: Vec<usize>,
 }
 
 impl UnionFind {
-    fn new(n: usize) -> Self {
+    pub(super) fn new(n: usize) -> Self {
         UnionFind {
             parent: (0..n).collect(),
         }
     }
 
-    fn find(&mut self, mut x: usize) -> usize {
+    pub(super) fn find(&mut self, mut x: usize) -> usize {
         while self.parent[x] != x {
             self.parent[x] = self.parent[self.parent[x]];
             x = self.parent[x];
@@ -56,7 +72,7 @@ impl UnionFind {
         x
     }
 
-    fn union(&mut self, a: usize, b: usize) {
+    pub(super) fn union(&mut self, a: usize, b: usize) {
         let (ra, rb) = (self.find(a), self.find(b));
         self.parent[ra] = rb;
     }
