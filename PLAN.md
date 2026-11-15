@@ -58,14 +58,77 @@ edges. ✅ means it is in `lib/src/tiling/catalogue.rs` and passes the tests now
 | Elongated triangular | 3.3.3.4.4 | square + triangle | ✅ |
 | Snub square | 3.3.4.3.4 | square + triangle | phase 3 |
 | Snub hexagonal | 3.3.3.3.6 | hexagon + triangle (chiral) | phase 3 |
+| Random triangle–hexagon mix | – | triangle + hexagon | phase 4 (§2.1) |
+| Square–triangle quasicrystal, with hexagon merges | 12-fold | all three | phase 4 (§2.1; inflation by 2+√3, still exact) |
+| Grown mix with a chosen ratio | – | all three | phase 8 (§2.1) |
 | 2-uniform tilings (the 20 using 3/4/6) | e.g. [3⁶; 3².4.3.4] | mixed | phase 8 |
-| Square–triangle quasicrystal | 12-fold | square + triangle | phase 8 (inflation by 2+√3, still exact) |
 | Rhombus / house-pentagon tilings | – | equilateral, 30° angles | phase 8 |
 
 ![The six tilings built so far](docs/tilings.png)
 
 *`make tilings` draws these into `docs/tilings/`. The red dots are the ports:
 the middles of edges a track may cross.*
+
+### 2.1 Mixing polygons in one maze
+
+Mixed shapes in one maze are a first-class goal, so they shape the design from
+the start. There are two kinds of mix:
+
+- **Repeating mixes**: the mixed tilings in the table above (3.6.3.6, 3.4.6.4,
+  3.3.3.4.4 and the snubs). A unit cell repeats, so they look orderly. These
+  work already.
+- **Free mixes**: triangles, squares and hexagons in a different arrangement
+  every time, with a knob for how much of each. These need generators other
+  than a unit cell.
+
+**What this means for the design (fixed now):**
+
+- **Only `Tiling` crosses the boundary.** The maze and the drawing code see
+  faces, edges and points, and nothing else: no `(i, j)` grid, no unit cell, no
+  assumption that tiles repeat or that neighbours sit in fixed directions. Any
+  generator that produces a `Tiling` gets mazes and drawings for free.
+- **Generators sit behind one trait**, so the CLI can pick one by name:
+
+  ```rust
+  trait TilingSource {
+      fn name(&self) -> &str;
+      fn build(&self, region: Region, rng: &mut impl Rng) -> Tiling;
+  }
+  ```
+
+  The periodic unit cells become one implementation, and each free-mix
+  generator below is another. The clipping and largest-piece step (§3.1) is
+  shared by all of them.
+- **Every rule works per tile shape.** The curves (§5.1), the wall rule (§5.2)
+  and the clearance table (§5.4) are worked out for each of the three shapes
+  separately. A track crossing from a hexagon into a triangle needs nothing
+  special, because both sides of an edge are the same port.
+- **Every maze test runs on a free mix too**, not only on the regular
+  tilings, so nothing quietly assumes regularity.
+
+**The free-mix generators, simplest first:**
+
+1. **Merge** (phase 4). Start from the triangular tiling and, in random order,
+   merge the six triangles round a vertex into one hexagon, so long as none of
+   them is already merged. `--hexagons 0.0..1.0` sets how many to try. The
+   result is a random triangle–hexagon mix, always valid and exact, because
+   every hexagon is made of real triangles. It is a few dozen lines.
+2. **Substitute, then merge** (phase 4). The square–triangle tiling grows by
+   *inflation*: each square and triangle is replaced by a fixed patch of
+   smaller squares and triangles, scaled by 2 + √3, which is still exact in
+   our number system. Repeat until the patch covers the region, then clip. That
+   gives a non-repeating 12-fold pattern of squares and triangles. Running the
+   merge step on it adds hexagons where six triangles meet, so all three shapes
+   mix freely.
+3. **Grow** (phase 8). Place tiles one at a time on the frontier, choosing a
+   shape by the requested ratio. Each placement must keep every vertex
+   completable to 360° from the valid corner types (3⁶, 3⁴.6, 3³.4², 3².4.3.4,
+   3.4.6.4, 3.6.3.6, 3².6², 3.4².6, 4⁴, 6³). Back up when a vertex can no longer
+   be completed. This gives the most control, but it can dead-end, so it comes
+   last.
+
+All three stay inside the 30° family, so coordinates stay exact and tiles still
+join by `HashMap`.
 
 ## 3. Architecture
 
@@ -78,18 +141,22 @@ maze-hex/
 ├── lib/            the library (no file I/O, so it also builds for wasm)
 │   └── src/
 │       ├── geometry.rs        ✅ exact Q(√3) numbers, points, the 12 directions
-│       ├── tiling/            ✅ faces, edges, vertices; unit cells; clipping
-│       │   └── catalogue.rs   ✅ the unit cell of every tiling
-│       ├── maze/              the spanning tree over tiles (or ports)
+│       ├── tiling/            ✅ faces, edges, vertices; clipping
+│       │   ├── catalogue.rs   ✅ the unit cell of every periodic tiling
+│       │   ├── source.rs      the TilingSource trait (§2.1)
+│       │   ├── merge.rs       triangles to hexagons (free mix, phase 4)
+│       │   └── substitute.rs  square–triangle inflation (free mix, phase 4)
+│       ├── maze/              the tree over ports (pass-through) or tiles (hub)
 │       │   ├── mod.rs         Maze { tiling, open ports, blocks per tile, entrance, exit }
-│       │   ├── algorithms.rs  Wilson, backtracker, Kruskal, Prim
-│       │   ├── blocks.rs      non-crossing groupings of a tile's ports (phase 5)
+│       │   ├── blocks.rs      non-crossing groupings of a tile's sides, and the clearance table
+│       │   ├── kruskal.rs     the pass-through generator and its repair passes
+│       │   ├── hub.rs         hub mode: Wilson, backtracker, Kruskal, Prim over tiles
 │       │   └── solution.rs    the route from entrance to exit
 │       ├── render/
 │       │   ├── curves.rs      the centreline and wall curves between two ports
 │       │   ├── walls.rs       walls per tile, then chained into long strokes
 │       │   ├── svg.rs         plain SVG
-│       │   ├── ink.rs         the hand-drawn pen (ported from Lubra)
+│       │   ├── ink.rs         the hand-drawn pen (copied from Lubra)
 │       │   └── png.rs         behind the `png` feature, like Lubra
 │       └── debug_svg.rs       ✅ tiling preview (tiles shaded, ports dotted)
 ├── cli/            the `maze-hex` binary (clap), same flags as Lubra where they fit
@@ -128,52 +195,13 @@ struct Maze {
 struct Block(Vec<usize>);          // side indices, in anticlockwise order
 ```
 
-In **hub mode** (phases 2–4) every face has at most one block holding all its
-open sides. In **pass-through mode** (phase 5) a face can hold several blocks
-that don't cross.
+In **pass-through mode** (the default, from phase 2) a face can hold several
+blocks that don't cross. **Hub mode** (`--mode hub`) is the special case where
+every face has at most one block holding all its open sides.
 
 ## 4. Generating the maze
 
-### 4.1 Hub mode: a tree over tiles (phase 2)
-
-The dual graph has one node per tile and one link per interior edge. A
-spanning tree of it is a perfect maze: one route between any two tiles. Each
-algorithm gives a different feel, and `--algorithm` picks one:
-
-| Algorithm | Feel |
-| --------- | ---- |
-| Wilson (default) | uniform spanning tree, unbiased, lots of short dead ends |
-| Recursive backtracker | long winding corridors, few junctions |
-| Randomised Kruskal / Prim | many short branches |
-| Growing tree (mix of newest/random) | tunable between the two |
-
-Each step in hub mode is ordinary, well-tested maze code that works on any
-graph, so all tilings come for free once one does.
-
-Style knobs (weights when picking the next link):
-
-- `--straightness`: prefer going straight through a tile (opposite sides)
-  over turning. On hexagons this decides between long straight runs and
-  constant zig-zags.
-- `--junctions`: penalise tiles that already have 3+ open sides.
-- In mixed tilings, optionally prefer routes through big tiles (hexagons)
-  over small ones (triangles).
-
-**Entrance and exit.** These are bottom left and top right, as in Lubra. Pick
-the boundary tile nearest each corner. Grow the tree over every other tile
-first, then attach these two as leaves, so each is a dead end and can carry
-Lubra's red marker disc. The `maze.do.id.au` site wants every maze to share this
-look.
-
-**Solution.** BFS on the tree from entrance to exit, kept as a list of
-`(face, from side, to side)`.
-
-**Dead-end trimming** (`--trim-dead-ends N`, like Lubra). Removing a dead end
-in a perfect maze leaves its tile blank. Lubra accepts that, and maze-hex
-can too. The default is `0` here because blank tiles in a hexagon grid stand
-out more.
-
-### 4.2 Pass-through mode: a tree over ports (phase 5)
+### 4.1 Pass-through mode: a tree over ports (the default)
 
 This gives the Lubra look without the Lubra machinery. A tile may hold
 **several separate tracks**, as long as they don't cross. In a hexagon with
@@ -193,6 +221,9 @@ The model:
   which is a junction.
 - Each tile state must also pass the **clearance table** (§5.4).
 
+None of this depends on the tile's shape beyond its number of sides, so mixed
+tilings need nothing extra.
+
 The algorithm is randomised Kruskal over all chords. Accept a chord if its two
 ports are in different trees (so no loop forms), it crosses nothing already in
 its tile, and the tile still passes clearance. Then come the repair passes,
@@ -205,10 +236,58 @@ which are smaller cousins of Lubra's:
 3. **Fill**: a tile with no block gets a short branch grown in from an
    open neighbour, if clearance allows. Otherwise it stays blank, as in Lubra.
 
+For long winding corridors instead of Kruskal's many short branches,
+`--algorithm backtracker` walks from port to port and picks a chord that
+crosses nothing in its tile, backing up when stuck. The same repair passes
+follow.
+
 The states are few. A hexagon's six sides can be grouped without crossings in
 132 ways (a Catalan number). Allowing closed sides as well, a hexagon has 731
 states, a square 51 and a triangle 15. That is small enough to list, test and
 draw every one in the design notes.
+
+### 4.2 Hub mode: a tree over tiles (`--mode hub`)
+
+With at most one block per tile, the maze is a spanning tree of the dual graph:
+one node per tile, one link per interior edge. Any classic algorithm works on
+any tiling, mixed or not:
+
+| Algorithm | Feel |
+| --------- | ---- |
+| Wilson | uniform spanning tree, unbiased, lots of short dead ends |
+| Recursive backtracker | long winding corridors, few junctions |
+| Randomised Kruskal / Prim | many short branches |
+| Growing tree (mix of newest/random) | tunable between the two |
+
+Hub mode comes cheaply: it is pass-through with the "one block per tile" rule,
+plus the standard algorithms. It is also a useful baseline when testing the
+drawing code.
+
+### 4.3 Shared by both modes
+
+**Style knobs** (weights when picking the next chord or link):
+
+- `--straightness`: prefer going straight through a tile (opposite sides)
+  over turning. On hexagons this decides between long straight runs and
+  constant zig-zags.
+- `--junctions`: penalise blocks that already have 3+ sides.
+- `--pass-through 0.0..1.0` (pass-through mode): how often a tile carries
+  two tracks rather than one.
+- In mixed tilings, optionally prefer routes through big tiles (hexagons)
+  over small ones (triangles).
+
+**Entrance and exit.** These are bottom left and top right, as in Lubra. Pick
+the boundary tile nearest each corner; this works on ragged free-mix edges too.
+Fix each as a one-side dead end with Lubra's red marker disc, and let the
+generator join everything else to them. The `maze.do.id.au` site wants every
+maze to share this look.
+
+**Solution.** BFS from entrance to exit, kept as a list of
+`(face, from side, to side)`.
+
+**Dead-end trimming** (`--trim-dead-ends N`, like Lubra). Removing a dead end
+can leave a tile blank. Lubra accepts that, and maze-hex can too. The default
+is `0` here because blank tiles in a hexagon grid stand out more.
 
 ## 5. Drawing
 
@@ -316,14 +395,14 @@ Each phase ends with `make lint` clean: no build warnings, `cargo fmt`, and
 | # | Phase | Delivers | Done when |
 | - | ----- | -------- | --------- |
 | 0 | Scaffold ✅ | workspace, Makefile, CI, README, this plan | `make lint test` passes |
-| 1 | Geometry and tilings ✅ (mostly) | exact Q(√3), 6 unit cells, clipping, `make tilings` | tests below pass; **still to do:** boundary smoothing (drop spiky one-neighbour tiles) and region shapes (rectangle, hexagon, circle) |
-| 2 | First hex maze | `maze/` hub mode with Wilson + backtracker, `render/curves.rs`, `walls.rs`, plain `svg.rs`, `cli` with `--seed -W -H -o -S -B -N` | `make maze` draws a hexagon maze and its solution, the same for the same seed |
-| 3 | Every tiling | the same maze on all catalogue tilings, plus snub square and snub hexagonal | every tiling draws; tree and containment tests pass on all of them |
-| 4 | Ink | port `ink.rs` from Lubra (pen wobble, width wander, red pencil solution), chained strokes, `-P` plain | ink mazes look like Lubra's; walls are one continuous line |
-| 5 | Pass-through | `blocks.rs`, non-crossing Kruskal and repair passes, clearance table, `--mode` | a hexagon maze with two tracks in some tiles, no wall closer than `m` |
+| 1 | Geometry and tilings ✅ (mostly) | exact Q(√3), 6 unit cells, clipping, `make tilings`; **still to do:** the `TilingSource` trait, boundary smoothing (drop spiky one-neighbour tiles), region shapes (rectangle, hexagon, circle) | the tests below pass |
+| 2 | First hex maze, pass-through | `blocks.rs` with the clearance table, `kruskal.rs` with the repair passes, `render/curves.rs`, `walls.rs`, plain `svg.rs`, `cli` with `--seed -W -H -o -S -B -N -T` | `make maze` draws a hexagon maze with some two-track tiles and its solution; the same seed gives the same maze; no wall is closer than `m` |
+| 3 | Every periodic tiling, and hub mode | the maze on all catalogue tilings plus snub square and snub hexagonal; `--mode hub` with Wilson and backtracker | every tiling draws in both modes; tree and containment tests pass on all of them |
+| 4 | Free mixes | `merge.rs` (triangles to hexagons, `--hexagons`), `substitute.rs` (square–triangle inflation, then merge) | random mixes of all three shapes draw cleanly; every maze test also runs on them |
+| 5 | Ink | copy `ink.rs` from Lubra (pen wobble, width wander, red pencil solution), chained strokes, `-P` plain | ink mazes look like Lubra's; walls are one continuous line |
 | 6 | Outputs and web | `png` feature, wasm build, `--plotter`; add `?maze=hex` to maze.do.id.au as a third wasm, next to the maze-rs and Lubra ones | playable at maze.do.id.au; S3 deploy via the existing GitHub Action |
 | 7 | Documents | README in Lubra's style (cover image, Play link, quick start, documents table), `docs/drawing.md`, `docs/settings.md`, Typst design notes with every tiling, curve case and allowed state | `make doc` builds the PDFs |
-| 8 | Stretch | 2-uniform tilings, the square–triangle quasicrystal (inflation), rhombus and house-pentagon tilings, Bézier fallback curves, shaped regions or image masks, Penrose and Cairo (needs Q(√5) or floats) | – |
+| 8 | Stretch | the grown mix with a chosen ratio, 2-uniform tilings, rhombus and house-pentagon tilings, Bézier fallback curves, shaped regions or image masks, Penrose and Cairo (needs Q(√5) or floats) | – |
 
 ## 7. Tests
 
@@ -340,8 +419,11 @@ These already pass, for every tiling in the catalogue:
 
 Still to add, by phase:
 
-- **Tree**: open links = tiles − 1, and every tile is reachable (hub mode). In
-  pass-through mode the same check runs over ports and chords.
+- **Tree**: in pass-through mode, chords = used ports − 1 and every used port is
+  reachable. In hub mode the same check runs over tiles and links.
+- **Free mixes**: every maze test also runs on merged and substituted tilings
+  over many seeds, and the tiling tests (exact edges, 360° corners, one piece)
+  run on each generator's output.
 - **Determinism**: the same seed and flags give byte-identical SVG.
 - **Non-crossing**: no tile holds two crossing chords (property test over many
   seeds).
@@ -362,16 +444,11 @@ Still to add, by phase:
   wasm.
 - Comments explain *why*, in plain sentences, like Lubra's.
 
-## 9. Open questions
+## 9. Decisions
 
-1. **"A series of polygons."** Does that mean the catalogue (one tiling per
-   maze, chosen with `--tiling`) or several shapes mixed in *one* maze? The
-   mixed Archimedean tilings already do the second. The square–triangle
-   quasicrystal (phase 8) goes further: a non-repeating mix.
-2. **Hub first or pass-through first?** Hub mode is the quickest way to a
-   working hexagon maze. Pass-through is what makes it feel like Lubra. The
-   plan does hub mode first.
-3. **Where the repo lives.** The plan assumes `~/Code/maze-hex` and a public
-   `daleobrien/maze-hex`, like Lubra and maze-rs.
-4. **Sharing the ink pen.** Copy Lubra's `ink.rs` into maze-hex, or move it into
-   a small shared crate that Lubra, maze-rs and maze-hex all use?
+| Question | Decision |
+| -------- | -------- |
+| Mixing polygons | Supported from the start: one `Tiling` model for everything, free-mix generators in phase 4 (§2.1) |
+| Hub or pass-through first | Pass-through first (phase 2); hub mode follows as `--mode hub` (phase 3) |
+| Where the repo lives | `~/Code/maze-hex` |
+| Ink pen | Copy Lubra's `ink.rs` for now; a shared crate can come later |

@@ -14,7 +14,7 @@ design and the roadmap.
 - `lib` does no file I/O so it can build for wasm; the CLI does the writing.
 - A tile only ever draws inside itself (PLAN.md §5.4). If a change would let a
   wall leave its tile, fix the clearance table instead of adding drawing order.
-- Follow Lubra's conventions (Makefile tasks, CLI flags, ink style, red
+- Follow Lubra's conventions (Makefile tasks, CLI flags, ink style copied from Lubra's `ink.rs`, red
   entrance/exit markers) unless PLAN.md says otherwise.
 - Comments explain why, in plain sentences. No `unwrap` in library code without
   a comment saying why it cannot fail.
