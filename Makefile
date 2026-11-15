@@ -1,9 +1,17 @@
 # Build, test and lint tasks for the maze-hex workspace.
 
 CARGO ?= cargo
+# `make maze` times a run with bash's `time` keyword, which dash lacks.
+SHELL := /bin/bash
+
+# The arguments for each CLI task. Override them on the command line, e.g.
+# `make cli CLI_ARGS="--seed 7 -S"`.
+CLI_ARGS ?= --seed 1 -W 30 -H 20 -B -o maze
+MAZE_ARGS ?= --seed 3 -W 60 -H 40 -o maze
+SAMPLE_ARGS ?= --seed 1 -W 30 -H 20
 
 .DEFAULT_GOAL := help
-.PHONY: help build test lint fmt tilings
+.PHONY: help build test lint fmt tilings cli maze sample
 
 help:
 	@echo "  make build    build everything"
@@ -11,6 +19,9 @@ help:
 	@echo "  make lint     cargo fmt --check and clippy with warnings as errors"
 	@echo "  make fmt      format the code"
 	@echo "  make tilings  draw every tiling in the catalogue into docs/tilings/"
+	@echo "  make cli      run the maze-hex command in cli/ (CLI_ARGS to change its flags)"
+	@echo "  make maze     time one run of maze-hex (MAZE_ARGS to change its flags)"
+	@echo "  make sample   write docs/sample.svg and docs/sample-solved.svg"
 
 build:
 	$(CARGO) build --workspace
@@ -28,3 +39,14 @@ fmt:
 tilings:
 	mkdir -p docs/tilings
 	$(CARGO) run --release --example tilings -- docs/tilings
+
+cli:
+	cd cli && $(CARGO) run --release -- $(CLI_ARGS)
+
+maze:
+	$(CARGO) build --release -p cli
+	cd cli && time ../target/release/maze-hex $(MAZE_ARGS)
+
+sample:
+	$(CARGO) run --release -p cli -- $(SAMPLE_ARGS) -o docs/sample
+	$(CARGO) run --release -p cli -- $(SAMPLE_ARGS) -S -o docs/sample-solved

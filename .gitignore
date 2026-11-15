@@ -4,5 +4,8 @@
 .idea/
 *.svg
 !docs/**/*.svg
+# Scratch output from `make cli` and `make maze`. The rule above already
+# covers it; this line says so where the CLI's output lands.
+cli/*.svg
 *.png
 !docs/*.png
