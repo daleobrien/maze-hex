@@ -32,6 +32,7 @@ next.
 ```bash
 make build     # build everything
 make cli CLI_ARGS="--seed 1 -W 30 -H 20 -S -o maze"   # draw a maze: cli/maze.svg
+make cli CLI_ARGS="--seed 1 -P -o plain"               # hand-drawn ink is the default; -P gives plain walls
 make cli CLI_ARGS="--tiling list"                      # every tiling
 make test      # run the tests
 make lint      # cargo fmt --check and clippy, warnings as errors
