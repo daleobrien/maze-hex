@@ -12,6 +12,7 @@
 //! For any other tile, a cubic Bézier with square ends is the fallback.
 
 use super::curve::{Curve, V2};
+use super::TrackStyle;
 use crate::tiling::Tiling;
 
 /// The float geometry of one tile, anticlockwise.
@@ -97,9 +98,10 @@ impl FaceGeometry {
         }
     }
 
-    /// The centre of a dead end's cap, entered from side `i`: the tile centre.
-    pub fn cap_centre(&self, i: usize) -> V2 {
-        let depth = self.inside_distance(self.centre(), i);
+    /// The centre of a dead end's cap, entered from side `i`: `depth` into
+    /// the tile, but never past its centre.
+    pub fn cap_centre(&self, i: usize, depth: f64) -> V2 {
+        let depth = depth.min(self.inside_distance(self.centre(), i));
         self.midpoint(i).plus(self.inward(i).scale(depth))
     }
 
@@ -139,21 +141,22 @@ impl FaceGeometry {
     }
 
     /// The centreline of a dead end from side `p` to its cap centre.
-    pub fn centreline_to_cap(&self, p: usize) -> Curve {
+    pub fn centreline_to_cap(&self, p: usize, style: &TrackStyle) -> Curve {
         Curve::Line {
             from: self.midpoint(p),
-            to: self.cap_centre(p),
+            to: self.cap_centre(p, style.cap_depth),
         }
     }
 
     /// The wall from side `p`'s ahead point to side `q`'s behind point, going
     /// anticlockwise past the closed sides between them. When `p == q` the
     /// track is a dead end and the wall is a U-turn with a round cap.
-    pub fn wall(&self, p: usize, q: usize, width: f64) -> Wall {
+    pub fn wall(&self, p: usize, q: usize, style: &TrackStyle) -> Wall {
+        let width = style.width;
         let a = self.side_point(p, true, width);
         let b = self.side_point(q, false, width);
         let curves = if p == q {
-            let centre = self.cap_centre(p);
+            let centre = self.cap_centre(p, style.cap_depth);
             let tp = self.direction(p);
             let half = width / 2.0;
             vec![
@@ -185,12 +188,12 @@ impl FaceGeometry {
     /// Every wall of a tile whose open sides are grouped into `blocks`, each
     /// listing its sides in anticlockwise order. Consecutive sides of a block
     /// are joined by a wall; a block of one side is a dead end.
-    pub fn walls(&self, blocks: &[Vec<usize>], width: f64) -> Vec<Wall> {
+    pub fn walls(&self, blocks: &[Vec<usize>], style: &TrackStyle) -> Vec<Wall> {
         let mut walls = Vec::new();
         for block in blocks {
             for (k, &p) in block.iter().enumerate() {
                 let q = block[(k + 1) % block.len()];
-                walls.push(self.wall(p, q, width));
+                walls.push(self.wall(p, q, style));
             }
         }
         walls
@@ -200,6 +203,13 @@ impl FaceGeometry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn style(width: f64) -> TrackStyle {
+        TrackStyle {
+            width,
+            ..TrackStyle::default()
+        }
+    }
 
     fn regular(n: usize) -> FaceGeometry {
         let mut vertices = Vec::new();
@@ -224,8 +234,8 @@ mod tests {
         let w = 0.4;
         for n in [3, 4, 6] {
             let face = regular(n);
-            let inner = face.wall(0, 1, w);
-            let outer = face.wall(1, 0, w);
+            let inner = face.wall(0, 1, &style(w));
+            let outer = face.wall(1, 0, &style(w));
             assert!((arc_radius(&inner.curves[0]) - (0.5 - w / 2.0)).abs() < 1e-9);
             assert!((arc_radius(&outer.curves[0]) - (0.5 + w / 2.0)).abs() < 1e-9);
             assert!((arc_radius(&face.centreline(0, 1)) - 0.5).abs() < 1e-9);
@@ -245,7 +255,7 @@ mod tests {
             let half = n / 2;
             assert!(matches!(face.centreline(0, half), Curve::Line { .. }));
             assert!(matches!(
-                face.wall(0, half, 0.4).curves[0],
+                face.wall(0, half, &style(0.4)).curves[0],
                 Curve::Line { .. }
             ));
         }
@@ -258,7 +268,7 @@ mod tests {
             let face = regular(n);
             for p in 0..n {
                 for q in 0..n {
-                    let wall = face.wall(p, q, w);
+                    let wall = face.wall(p, q, &style(w));
                     let first = wall.curves[0].start();
                     let last = wall.curves[wall.curves.len() - 1].end();
                     assert!(first.distance(face.side_point(p, true, w)) < 1e-9);

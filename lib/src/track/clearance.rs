@@ -14,28 +14,8 @@ use std::collections::HashMap;
 
 use super::curve::{distance_to_polyline, V2};
 use super::face::FaceGeometry;
+use super::TrackStyle;
 use crate::tiling::PolygonKind;
-
-/// How tracks are drawn, in edge lengths.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct TrackStyle {
-    /// The track's width.
-    pub width: f64,
-    /// The least distance between two walls.
-    pub gap: f64,
-    /// The least distance from a wall to a side it doesn't cross.
-    pub margin: f64,
-}
-
-impl Default for TrackStyle {
-    fn default() -> Self {
-        TrackStyle {
-            width: 0.4,
-            gap: 0.1,
-            margin: 0.06,
-        }
-    }
-}
 
 /// How finely walls are sampled for the check.
 const SAMPLE_STEP: f64 = 0.01;
@@ -139,7 +119,7 @@ impl Clearance {
     fn draws_cleanly(&self, kind: PolygonKind, labels: &[u8]) -> bool {
         let face = regular(kind);
         let style = self.style;
-        let walls = face.walls(&blocks_of(labels), style.width);
+        let walls = face.walls(&blocks_of(labels), &style);
         let samples: Vec<Vec<V2>> = walls
             .iter()
             .map(|wall| {
@@ -182,6 +162,7 @@ impl Clearance {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::track::TrackStyle;
     use PolygonKind::{Hexagon, Square, Triangle};
 
     /// Every state of an `n`-sided tile: each side closed or in a block.

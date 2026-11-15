@@ -1,0 +1,212 @@
+//! The route from the entrance to the exit, and a check that the maze is a
+//! single tree.
+//!
+//! The maze is a graph with two kinds of node: ports (open edges) and blocks
+//! (groups of sides joined inside a tile). Each block links to the port on
+//! each of its sides.
+
+use std::collections::VecDeque;
+
+use super::{Cap, Maze};
+
+/// One tile on the route: entered by `from` and left by `to`. `None` means the
+/// route starts or ends at a dead end's cap in this tile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Step {
+    pub face: usize,
+    pub from: Option<usize>,
+    pub to: Option<usize>,
+}
+
+struct Graph {
+    /// For each node, its neighbours. Ports come first, then blocks.
+    links: Vec<Vec<usize>>,
+    /// For each block node: (face, block index).
+    blocks: Vec<(usize, usize)>,
+    ports: usize,
+}
+
+fn graph(maze: &Maze) -> Graph {
+    let ports = maze.tiling.edges.len();
+    let mut links: Vec<Vec<usize>> = vec![Vec::new(); ports];
+    let mut blocks = Vec::new();
+    for (face, face_blocks) in maze.blocks.iter().enumerate() {
+        for (index, block) in face_blocks.iter().enumerate() {
+            let node = links.len();
+            links.push(Vec::new());
+            blocks.push((face, index));
+            for &side in block {
+                let edge = maze.tiling.faces[face].edges[side];
+                links[node].push(edge);
+                links[edge].push(node);
+            }
+        }
+    }
+    Graph {
+        links,
+        blocks,
+        ports,
+    }
+}
+
+impl Graph {
+    fn block_node(&self, maze: &Maze, cap: Cap) -> Option<usize> {
+        let index = maze.blocks[cap.face]
+            .iter()
+            .position(|b| b == &[cap.side])?;
+        self.blocks
+            .iter()
+            .position(|&b| b == (cap.face, index))
+            .map(|k| self.ports + k)
+    }
+}
+
+impl Maze {
+    /// The tiles from the entrance to the exit, in order.
+    pub fn solution(&self) -> Vec<Step> {
+        let graph = graph(self);
+        let (Some(start), Some(goal)) = (
+            graph.block_node(self, self.entrance),
+            graph.block_node(self, self.exit),
+        ) else {
+            return Vec::new();
+        };
+        let mut came_from = vec![usize::MAX; graph.links.len()];
+        came_from[start] = start;
+        let mut queue = VecDeque::from([start]);
+        while let Some(node) = queue.pop_front() {
+            if node == goal {
+                break;
+            }
+            for &next in &graph.links[node] {
+                if came_from[next] == usize::MAX {
+                    came_from[next] = node;
+                    queue.push_back(next);
+                }
+            }
+        }
+        if came_from[goal] == usize::MAX {
+            return Vec::new();
+        }
+        let mut path = vec![goal];
+        while *path.last().unwrap_or(&start) != start {
+            let last = path[path.len() - 1];
+            path.push(came_from[last]);
+        }
+        path.reverse();
+
+        // Turn block, port, block, ... into steps through each block's tile.
+        let side_of = |face: usize, port: usize| {
+            self.tiling.faces[face]
+                .edges
+                .iter()
+                .position(|&e| e == port)
+        };
+        path.iter()
+            .enumerate()
+            .filter(|(_, &node)| node >= graph.ports)
+            .map(|(i, &node)| {
+                let (face, _) = graph.blocks[node - graph.ports];
+                let from = i.checked_sub(1).and_then(|j| side_of(face, path[j]));
+                let to = path.get(i + 1).and_then(|&port| side_of(face, port));
+                Step { face, from, to }
+            })
+            .collect()
+    }
+
+    /// Whether the tracks form exactly one tree: connected, with no loops.
+    pub fn is_one_tree(&self) -> bool {
+        let graph = graph(self);
+        // Only open ports and blocks take part.
+        let nodes: Vec<usize> = (0..graph.links.len())
+            .filter(|&n| !graph.links[n].is_empty())
+            .collect();
+        let links: usize = nodes.iter().map(|&n| graph.links[n].len()).sum::<usize>() / 2;
+        if nodes.is_empty() || links + 1 != nodes.len() {
+            return false;
+        }
+        let mut seen = vec![false; graph.links.len()];
+        let mut stack = vec![nodes[0]];
+        seen[nodes[0]] = true;
+        let mut count = 0;
+        while let Some(n) = stack.pop() {
+            count += 1;
+            for &next in &graph.links[n] {
+                if !seen[next] {
+                    seen[next] = true;
+                    stack.push(next);
+                }
+            }
+        }
+        count == nodes.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::maze::{Maze, MazeOptions};
+    use crate::rng::Rng;
+    use crate::tiling::source::{source_by_name, source_names};
+    use crate::tiling::Region;
+
+    fn maze(name: &str, seed: u64) -> Maze {
+        let source = source_by_name(name).expect("a known tiling");
+        let tiling = source.build(Region::rectangle(14.0, 10.0), &mut Rng::new(seed));
+        let options = MazeOptions {
+            seed,
+            ..MazeOptions::default()
+        };
+        Maze::generate(tiling, &options).expect("room for a maze")
+    }
+
+    #[test]
+    fn every_tiling_gives_one_tree_with_a_route_through_it() {
+        for name in source_names() {
+            for seed in 1..4 {
+                let maze = maze(name, seed);
+                assert!(maze.is_one_tree(), "{name} seed {seed}");
+                let route = maze.solution();
+                assert!(route.len() >= 2, "{name} seed {seed}");
+                let first = route[0];
+                let last = route[route.len() - 1];
+                assert_eq!((first.face, first.from), (maze.entrance.face, None));
+                assert_eq!((last.face, last.to), (maze.exit.face, None));
+                // Each step leaves by an open edge into the next step's tile.
+                for pair in route.windows(2) {
+                    let edge = maze.tiling.faces[pair[0].face].edges
+                        [pair[0].to.expect("leaves by a side")];
+                    assert!(maze.open[edge]);
+                    assert_eq!(
+                        maze.tiling.faces[pair[1].face].edges
+                            [pair[1].from.expect("enters by a side")],
+                        edge
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_same_seed_gives_the_same_maze() {
+        let a = maze("hexagonal", 9);
+        let b = maze("hexagonal", 9);
+        assert_eq!(a.blocks, b.blocks);
+        assert_ne!(a.blocks, maze("hexagonal", 10).blocks);
+    }
+
+    #[test]
+    fn hexagon_mazes_have_tiles_with_two_tracks_and_few_blanks() {
+        let maze = maze("hexagonal", 1);
+        let doubles = maze
+            .blocks
+            .iter()
+            .filter(|b| b.iter().filter(|x| x.len() > 1).count() > 1)
+            .count();
+        assert!(doubles > 0);
+        assert!(
+            maze.blank_tiles() * 10 < maze.tiling.faces.len(),
+            "{} blank",
+            maze.blank_tiles()
+        );
+    }
+}
