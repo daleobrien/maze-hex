@@ -3,6 +3,7 @@
 //! that a match on each one stays easy to read.
 
 use lib::maze::{Algorithm, GenerateOptions, Mode as TrackMode};
+use lib::tiling::grow::RandomMix;
 use lib::tiling::source::source_by_name;
 use lib::tiling::Shape;
 use lib::track::TrackStyle;
@@ -26,6 +27,8 @@ pub struct Options {
     pub width: f64,
     pub height: f64,
     pub shape: Shape,
+    /// Weights of triangles, squares and hexagons for `--tiling random`.
+    pub mix: Option<[f64; 3]>,
     /// The file name without its extension; `.svg` is added if missing.
     pub output: String,
     pub solution: bool,
@@ -50,6 +53,7 @@ impl Default for Options {
             width: 30.0,
             height: 20.0,
             shape: Shape::Rectangle,
+            mix: None,
             output: "maze".to_string(),
             solution: false,
             boundaries: false,
@@ -110,6 +114,7 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
                     }
                 };
             }
+            "--mix" => options.mix = Some(mix(arg, &mut rest)?),
             "-o" | "--output" => options.output = value(arg, &mut rest)?.to_string(),
             "-S" | "--solution" => options.solution = true,
             "-B" | "--boundaries" => options.boundaries = true,
@@ -147,7 +152,41 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
                 .to_string(),
         );
     }
+    if options.mix.is_some() && options.tiling != "random" {
+        return Err("--mix only applies with --tiling random".to_string());
+    }
     Ok(options)
+}
+
+/// Three comma-separated weights, `T,S,H`: not negative, and not all zero.
+fn mix(flag: &str, rest: &mut std::slice::Iter<'_, String>) -> Result<[f64; 3], String> {
+    let text = value(flag, rest)?;
+    let bad = || {
+        format!(
+            "{flag} needs three weights like 1,1,1 (triangles, squares, hexagons), got '{text}'"
+        )
+    };
+    let parts: Vec<&str> = text.split(',').collect();
+    if parts.len() != 3 {
+        return Err(bad());
+    }
+    let mut weights = [0.0; 3];
+    for (weight, part) in weights.iter_mut().zip(parts) {
+        *weight = part
+            .parse::<f64>()
+            .ok()
+            .filter(|n| n.is_finite())
+            .ok_or_else(bad)?;
+        if *weight < 0.0 {
+            return Err(format!("{flag} weights must be 0 or more, got '{text}'"));
+        }
+    }
+    if weights.iter().all(|&w| w == 0.0) {
+        return Err(format!(
+            "{flag} needs at least one weight above 0, got '{text}'"
+        ));
+    }
+    Ok(weights)
 }
 
 /// The next argument, which must be there and must not be another flag. A
@@ -206,6 +245,12 @@ pub fn output_path(name: &str) -> String {
     }
 }
 
+/// The default weights as `1,1,1`, for the help text.
+fn mix_text() -> String {
+    let w = RandomMix::default().weights;
+    format!("{},{},{}", w[0], w[1], w[2])
+}
+
 /// The help text. The defaults come from `Options::default` and the lib
 /// settings, so the text cannot drift from what the program does.
 pub fn usage() -> String {
@@ -221,6 +266,9 @@ usage: maze-hex [options]
   -W, --width N       width in edge lengths (default {width})
   -H, --height N      height in edge lengths (default {height})
   --shape SHAPE       rectangle, hexagon or circle (default rectangle)
+  --mix T,S,H         with --tiling random: how much of each shape, as three weights for
+                      triangles, squares and hexagons (default {mix}). A pull, not an exact
+                      ratio; squares and hexagons cannot meet without triangles
   -o, --output NAME   file to write, NAME.svg (default {output})
   -S, --solution      draw the route from entrance to exit in red
   -B, --boundaries    draw faint tile outlines
@@ -242,6 +290,7 @@ usage: maze-hex [options]
         width = d.width,
         height = d.height,
         output = d.output,
+        mix = mix_text(),
         track_width = d.style.width,
         cap_depth = d.style.cap_depth,
         algorithm = d.generate.algorithm.name(),
@@ -484,6 +533,30 @@ mod tests {
     }
 
     #[test]
+    fn mix_is_read_and_checked() {
+        let o = parse_strs(&["--tiling", "random", "--mix", "3,1,0.5"]).unwrap();
+        assert_eq!(o.mix, Some([3.0, 1.0, 0.5]));
+        assert_eq!(parse_strs(&["--tiling", "random"]).unwrap().mix, None);
+        for bad in ["1,1", "1,1,1,1", "a,1,1", "1,-1,1", "inf,1,1", ""] {
+            assert!(
+                parse_strs(&["--tiling", "random", "--mix", bad]).is_err(),
+                "{bad}"
+            );
+        }
+        assert!(parse_strs(&["--tiling", "random", "--mix", "0,0,0"])
+            .unwrap_err()
+            .contains("above 0"));
+        // The flags may come in either order.
+        assert!(parse_strs(&["--mix", "1,2,3", "--tiling", "random"]).is_ok());
+        for args in [
+            &["--mix", "1,1,1"][..],
+            &["--tiling", "hexagonal", "--mix", "1,1,1"],
+        ] {
+            assert!(parse_strs(args).unwrap_err().contains("--tiling random"));
+        }
+    }
+
+    #[test]
     fn output_gets_an_svg_extension_once() {
         assert_eq!(output_path("maze"), "maze.svg");
         assert_eq!(output_path("maze.svg"), "maze.svg");
@@ -499,6 +572,7 @@ mod tests {
             "-W, --width",
             "-H, --height",
             "--shape",
+            "--mix",
             "-o, --output",
             "-S, --solution",
             "-B, --boundaries",

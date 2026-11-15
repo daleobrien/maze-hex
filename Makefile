@@ -9,9 +9,10 @@ SHELL := /bin/bash
 CLI_ARGS ?= --seed 1 -W 30 -H 20 -B -o maze
 MAZE_ARGS ?= --seed 3 -W 60 -H 40 -o maze
 SAMPLE_ARGS ?= --seed 1 -W 30 -H 20
+RANDOM_ARGS ?= --tiling random --mix 1,1,1 --seed 1 -W 30 -H 20 -S -o random
 
 .DEFAULT_GOAL := help
-.PHONY: help build test lint fmt tilings cli maze sample
+.PHONY: help build test lint fmt tilings cli random maze sample
 
 help:
 	@echo "  make build    build everything"
@@ -20,8 +21,9 @@ help:
 	@echo "  make fmt      format the code"
 	@echo "  make tilings  draw every tiling in the catalogue into docs/tilings/"
 	@echo "  make cli      run the maze-hex command in cli/ (CLI_ARGS to change its flags)"
+	@echo "  make random   draw a maze on a random mix of triangles, squares and hexagons (RANDOM_ARGS)"
 	@echo "  make maze     time one run of maze-hex (MAZE_ARGS to change its flags)"
-	@echo "  make sample   write docs/sample.svg, docs/sample-solved.svg and docs/sample-mixed.svg"
+	@echo "  make sample   write docs/sample.svg, docs/sample-solved.svg and docs/sample-mixed.svg and docs/sample-random.svg"
 
 build:
 	$(CARGO) build --workspace
@@ -43,6 +45,9 @@ tilings:
 cli:
 	cd cli && $(CARGO) run --release -- $(CLI_ARGS)
 
+random:
+	cd cli && $(CARGO) run --release -- $(RANDOM_ARGS)
+
 maze:
 	$(CARGO) build --release -p cli
 	cd cli && time ../target/release/maze-hex $(MAZE_ARGS)
@@ -51,3 +56,4 @@ sample:
 	$(CARGO) run --release -p cli -- $(SAMPLE_ARGS) -o docs/sample
 	$(CARGO) run --release -p cli -- $(SAMPLE_ARGS) -S -o docs/sample-solved
 	$(CARGO) run --release -p cli -- $(SAMPLE_ARGS) --tiling triangle-hexagon -S -o docs/sample-mixed
+	$(CARGO) run --release -p cli -- $(SAMPLE_ARGS) --tiling random -S -o docs/sample-random

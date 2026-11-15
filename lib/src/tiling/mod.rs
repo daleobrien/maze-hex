@@ -7,6 +7,7 @@
 //! their exact coordinates.
 
 pub mod catalogue;
+pub mod grow;
 pub mod merge;
 mod region;
 pub mod rows;

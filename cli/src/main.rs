@@ -9,8 +9,9 @@ use args::{Mode, Options};
 use lib::maze::{Maze, MazeOptions};
 use lib::render::svg::{render, SvgOptions};
 use lib::rng::Rng;
+use lib::tiling::grow::RandomMix;
 use lib::tiling::source::{source_by_name, source_names};
-use lib::tiling::Region;
+use lib::tiling::{Region, TilingSource};
 
 fn main() {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
@@ -49,8 +50,12 @@ fn run(options: &Options) -> Result<(), String> {
             seed
         }
     };
-    let source = source_by_name(&options.tiling)
-        .ok_or_else(|| format!("unknown tiling '{}'", options.tiling))?;
+    // `--mix` is only accepted with `--tiling random`, so it replaces the default source.
+    let source: Box<dyn TilingSource> = match options.mix {
+        Some(weights) => Box::new(RandomMix { weights }),
+        None => source_by_name(&options.tiling)
+            .ok_or_else(|| format!("unknown tiling '{}'", options.tiling))?,
+    };
     let region = Region::rectangle(options.width, options.height).with_shape(options.shape);
 
     // The tiling and the maze each draw from their own stream, but both start

@@ -186,6 +186,30 @@ mod tests {
         }
     }
 
+    #[test]
+    fn grown_mixes_give_one_tree_with_a_route() {
+        use crate::tiling::grow::RandomMix;
+        use crate::tiling::TilingSource;
+        for weights in [
+            [1.0, 1.0, 1.0],
+            [3.0, 1.0, 0.0],
+            [1.0, 3.0, 1.0],
+            [1.0, 0.0, 1.0],
+        ] {
+            for seed in 1..5 {
+                let tiling =
+                    RandomMix { weights }.build(Region::rectangle(20.0, 14.0), &mut Rng::new(seed));
+                let options = MazeOptions {
+                    seed,
+                    ..MazeOptions::default()
+                };
+                let maze = Maze::generate(tiling, &options).expect("room for a maze");
+                assert!(maze.is_one_tree(), "{weights:?} seed {seed}");
+                assert!(maze.solution().len() >= 2, "{weights:?} seed {seed}");
+            }
+        }
+    }
+
     /// A maze with crossings off, which repeats the mazes made before
     /// bridges existed.
     fn maze_without_crossings(name: &str, seed: u64) -> Maze {

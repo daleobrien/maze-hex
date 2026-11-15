@@ -4,6 +4,7 @@
 
 use super::{
     catalogue,
+    grow::RandomMix,
     merge::TriangleHexagon,
     rows::{RowMix, RowMixHexagon},
     Region, Tiling, UnitCell,
@@ -42,7 +43,7 @@ impl<T: TilingSource + ?Sized> TilingSource for &T {
 }
 
 /// The names of the free-mix generators, after the periodic tilings.
-const GENERATORS: [&str; 3] = ["triangle-hexagon", "row-mix", "row-mix-hexagon"];
+const GENERATORS: [&str; 4] = ["triangle-hexagon", "row-mix", "row-mix-hexagon", "random"];
 
 /// Every source name: the periodic tilings, then the generators.
 pub fn source_names() -> Vec<&'static str> {
@@ -62,6 +63,7 @@ pub fn source_by_name(name: &str) -> Option<Box<dyn TilingSource>> {
         "triangle-hexagon" => Some(Box::new(TriangleHexagon::default())),
         "row-mix" => Some(Box::new(RowMix::default())),
         "row-mix-hexagon" => Some(Box::new(RowMixHexagon::default())),
+        "random" => Some(Box::new(RandomMix::default())),
         _ => None,
     }
 }
