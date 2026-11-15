@@ -19,9 +19,10 @@ generate and no drawing order to worry about. Every edge in a tiling has the
 same length, so a track can pass from a hexagon to a square to a triangle with
 the same width.
 
-**Status:** phase 2 of [PLAN.md](PLAN.md). Mazes draw on nine tilings, including
-a random mix of triangles and hexagons, with plain walls. Hand-drawn ink comes
-next.
+**Status:** phases 1–3 and 5 of [PLAN.md](PLAN.md) are done. Mazes draw in
+hand-drawn ink on eleven tilings, including random mixes of triangles, squares
+and hexagons, in pass-through or hub mode. Next: the web build for
+maze.do.id.au.
 
 <p align="center">
   <img src="docs/sample-mixed.svg" alt="A maze on a random mix of triangles and hexagons" width="100%">
