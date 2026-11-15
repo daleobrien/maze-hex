@@ -325,11 +325,13 @@ crossing, drawn as a bridge.
   by the repair pass, so that tiling rarely keeps a bridge.
 - **Over or under.** A coin per bridge, from its own random stream, so it
   doesn't disturb the maze.
-- **Drawing.** Everything else is drawn first: the walls (without the upper
-  track's), then the route. Then each bridge paints its upper band in the
-  track colour, covering the lower track, and draws its two walls. The route
-  is drawn again where it runs over a bridge; where it runs under, the bridge
-  hides it (Lubra pencils it lightly there, a possible refinement).
+- **Drawing.** The walls go first (without the upper tracks'). Then each
+  bridge paints its upper band in the track colour, covering the lower track,
+  and draws its two walls. The route is drawn once, on top, with an SVG mask
+  cutting it out of the bands of the bridges it passes under (drawing it twice
+  would leave darker blotches where semi-transparent strokes overlap). Where it
+  passes under, it shows as a faint trace across the bridge, as in Lubra:
+  pencilled once at opacity 0.18 in ink, 0.25 plain.
 
 ## 5. Drawing
 

@@ -95,6 +95,8 @@ pub fn wall_strokes(maze: &Maze, skip_bridges: bool) -> Vec<Stroke> {
 /// track beneath, and its two walls.
 #[derive(Clone, Debug)]
 pub struct BridgeShape {
+    /// The tile the bridge is in.
+    pub face: usize,
     pub outline: Vec<Curve>,
     pub walls: Vec<Stroke>,
 }
@@ -124,6 +126,7 @@ pub fn bridges(maze: &Maze) -> Vec<BridgeShape> {
             to: geometry.side_point(p, true, width),
         });
         shapes.push(BridgeShape {
+            face: f,
             outline,
             walls: vec![
                 Stroke {

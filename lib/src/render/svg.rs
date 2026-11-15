@@ -236,29 +236,25 @@ pub fn render(maze: &Maze, options: &SvgOptions) -> String {
         svg.push_str(&ink::wall_markup(&lines, &pen));
     }
 
-    if options.solution {
-        let route = solution_curves(maze);
-        if options.plain {
-            let _ = writeln!(
-                svg,
-                "<path fill='none' stroke='{RED}' stroke-opacity='0.85' stroke-width='{:.2}' stroke-linejoin='round' stroke-linecap='round' d='{}'/>",
-                maze.style.width * SCALE * 0.3,
-                frame.path(&route, false)
-            );
-        } else {
-            svg.push_str(&ink::pencil_markup(&frame.sampled(&route), &pen));
-        }
-    }
-
-    // Each bridge's upper track: paper over whatever passes beneath, then its
-    // walls, then the route again where the route itself goes over.
-    for bridge in bridges(maze) {
-        if options.plain {
-            let _ = writeln!(
-                svg,
-                "<path fill='white' stroke='none' d='{}'/>",
+    // Each bridge's upper track: paper over the track beneath, then its
+    // walls. The outlines are kept to cut the route out of them below.
+    let shapes = bridges(maze);
+    let outlines: Vec<String> = shapes
+        .iter()
+        .map(|bridge| {
+            if options.plain {
                 frame.path(&bridge.outline, true)
-            );
+            } else {
+                let mut outline = frame.sampled(&bridge.outline);
+                outline.pop(); // the outline ends where it started
+                ink::outline_path(&outline, &pen)
+            }
+        })
+        .collect();
+    let paper = if options.plain { "white" } else { ink::PAPER };
+    for (bridge, outline) in shapes.iter().zip(&outlines) {
+        let _ = writeln!(svg, "<path fill='{paper}' stroke='none' d='{outline}'/>");
+        if options.plain {
             let walls: Vec<String> = bridge
                 .walls
                 .iter()
@@ -270,9 +266,6 @@ pub fn render(maze: &Maze, options: &SvgOptions) -> String {
                 walls.join("")
             );
         } else {
-            let mut outline = frame.sampled(&bridge.outline);
-            outline.pop(); // the outline ends where it started
-            svg.push_str(&ink::fill_markup(&[outline], &pen));
             let lines: Vec<(Vec<Point>, bool)> = bridge
                 .walls
                 .iter()
@@ -281,18 +274,58 @@ pub fn render(maze: &Maze, options: &SvgOptions) -> String {
             svg.push_str(&ink::wall_markup(&lines, &pen));
         }
     }
+
     if options.solution {
-        for piece in route_over_bridges(maze) {
-            if options.plain {
+        // The route is drawn once, on top, with the bands of the bridges it
+        // passes under cut out of it; drawing it twice would leave darker
+        // blotches where the semi-transparent strokes overlap.
+        let under: Vec<(usize, Curve)> = route_under_bridges(maze);
+        let hidden: Vec<&str> = shapes
+            .iter()
+            .zip(&outlines)
+            .filter(|(bridge, _)| under.iter().any(|(face, _)| *face == bridge.face))
+            .map(|(_, outline)| outline.as_str())
+            .collect();
+        if !hidden.is_empty() {
+            let _ = writeln!(
+                svg,
+                "<mask id='under' maskUnits='userSpaceOnUse' x='0' y='0' width='{w:.1}' height='{h:.1}'><rect width='{w:.1}' height='{h:.1}' fill='white'/><path fill='black' d='{}'/></mask>",
+                hidden.join("")
+            );
+            svg.push_str("<g mask='url(#under)'>\n");
+        }
+        let route = solution_curves(maze);
+        if options.plain {
+            let _ = writeln!(
+                svg,
+                "<path fill='none' stroke='{RED}' stroke-opacity='0.85' stroke-width='{:.2}' stroke-linejoin='round' stroke-linecap='round' d='{}'/>",
+                maze.style.width * SCALE * 0.3,
+                frame.path(&route, false)
+            );
+        } else {
+            svg.push_str(&ink::pencil_markup(&frame.sampled(&route), &pen));
+        }
+        if !hidden.is_empty() {
+            svg.push_str("</g>\n");
+        }
+
+        // Under a bridge the route is still there, just hidden: a faint
+        // trace across the track on top, as in Lubra.
+        if options.plain {
+            for (_, piece) in &under {
                 let _ = writeln!(
                     svg,
-                    "<path fill='none' stroke='{RED}' stroke-opacity='0.85' stroke-width='{:.2}' stroke-linecap='round' d='{}'/>",
+                    "<path fill='none' stroke='{RED}' stroke-opacity='0.25' stroke-width='{:.2}' stroke-linecap='round' d='{}'/>",
                     maze.style.width * SCALE * 0.3,
-                    frame.path(&[piece], false)
+                    frame.path(std::slice::from_ref(piece), false)
                 );
-            } else {
-                svg.push_str(&ink::pencil_markup(&frame.sampled(&[piece]), &pen));
             }
+        } else {
+            let lines: Vec<Vec<Point>> = under
+                .iter()
+                .map(|(_, piece)| frame.sampled(std::slice::from_ref(piece)))
+                .collect();
+            svg.push_str(&ink::faint_pencil_markup(&lines, &pen));
         }
     }
 
@@ -327,17 +360,18 @@ pub fn render(maze: &Maze, options: &SvgOptions) -> String {
     svg
 }
 
-/// The pieces of the route that run along a bridge's upper track, to draw
-/// again on top of it. Where the route runs beneath, the bridge hides it.
-fn route_over_bridges(maze: &Maze) -> Vec<Curve> {
+/// The pieces of the route that pass under a bridge, with their tiles.
+fn route_under_bridges(maze: &Maze) -> Vec<(usize, Curve)> {
     maze.solution()
         .iter()
         .filter_map(|step| {
             let bridge = maze.bridges[step.face]?;
             let (from, to) = (step.from?, step.to?);
-            let block = &maze.blocks[step.face][bridge.over];
-            (block.contains(&from) && block.contains(&to))
-                .then(|| FaceGeometry::of(&maze.tiling, step.face).centreline(from, to))
+            let block = &maze.blocks[step.face][bridge.under];
+            (block.contains(&from) && block.contains(&to)).then(|| {
+                let curve = FaceGeometry::of(&maze.tiling, step.face).centreline(from, to);
+                (step.face, curve)
+            })
         })
         .collect()
 }
@@ -461,6 +495,26 @@ mod tests {
             };
             let svg = render(&maze, &options);
             assert!(svg.starts_with("<svg") && svg.trim_end().ends_with("</svg>"));
+        }
+    }
+
+    #[test]
+    fn the_route_shows_faintly_under_a_bridge() {
+        // Search a few seeds for a route that passes under a bridge.
+        let maze = (1..40)
+            .map(hex_maze)
+            .find(|m| !route_under_bridges(m).is_empty())
+            .expect("some route passes under a bridge");
+        for (plain, faint) in [
+            (true, "stroke-opacity='0.25'"),
+            (false, "stroke-opacity='0.18'"),
+        ] {
+            let options = SvgOptions {
+                solution: true,
+                plain,
+                ..SvgOptions::default()
+            };
+            assert!(render(&maze, &options).contains(faint), "plain: {plain}");
         }
     }
 

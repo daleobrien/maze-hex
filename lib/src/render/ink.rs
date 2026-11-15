@@ -45,7 +45,11 @@ pub const STEP: f64 = 3.0;
 const SALT_X: u64 = 0x5851_F42D_4C95_7F2D;
 const SALT_Y: u64 = 0x1405_7B7E_F767_814F;
 const SALT_WIDTH: u64 = 0x2545_F491_4F6C_DD1D;
-const SALT_PENCIL: [u64; 2] = [0x9E37_79B9_7F4A_7C15, 0xBF58_476D_1CE4_E5B9];
+const SALT_PENCIL: [u64; 3] = [
+    0x9E37_79B9_7F4A_7C15,
+    0xBF58_476D_1CE4_E5B9,
+    0x94D0_49BB_1331_11EB,
+];
 
 pub type Point = (f64, f64);
 
@@ -127,12 +131,20 @@ fn wobbled(pen: &Pen, points: &[Point], salt: u64) -> Vec<Point> {
 /// loop nested in another a hole, which is right if a maze ever has islands,
 /// and costs nothing for a single loop.
 pub fn fill_markup(loops: &[Vec<Point>], pen: &Pen) -> String {
-    let mut d = String::new();
-    for points in loops {
-        push_polyline(&mut d, &wobbled(pen, points, 0));
-        d.push('Z');
-    }
+    let d: String = loops
+        .iter()
+        .map(|points| outline_path(points, pen))
+        .collect();
     format!("<path fill='{PAPER}' fill-rule='evenodd' stroke='none' d='{d}'/>\n")
+}
+
+/// Path data for a closed outline (each point once), wobbled exactly as the
+/// walls are, so a fill or mask made from it meets the ink.
+pub fn outline_path(points: &[Point], pen: &Pen) -> String {
+    let mut d = String::new();
+    push_polyline(&mut d, &wobbled(pen, points, 0));
+    d.push('Z');
+    d
 }
 
 /// Closed loops (each point once; the loop is closed here) or open lines in ink,
@@ -173,7 +185,10 @@ pub fn wall_markup(lines: &[(Vec<Point>, bool)], pen: &Pen) -> String {
 /// differently, as in Lubra.
 pub fn pencil_markup(route: &[Point], pen: &Pen) -> String {
     let mut out = String::new();
-    for (salt, width) in SALT_PENCIL.iter().zip([PEN_WIDTH * 2.2, PEN_WIDTH * 1.5]) {
+    for (salt, width) in SALT_PENCIL[..2]
+        .iter()
+        .zip([PEN_WIDTH * 2.2, PEN_WIDTH * 1.5])
+    {
         let mut d = String::new();
         push_polyline(&mut d, &wobbled(pen, route, *salt));
         let _ = writeln!(
@@ -182,6 +197,22 @@ pub fn pencil_markup(route: &[Point], pen: &Pen) -> String {
         );
     }
     out
+}
+
+/// The route where it passes under a bridge: pencilled once, lightly, over
+/// the track on top, as Lubra (and maze-rs before it) does.
+pub fn faint_pencil_markup(routes: &[Vec<Point>], pen: &Pen) -> String {
+    let mut d = String::new();
+    for route in routes {
+        push_polyline(&mut d, &wobbled(pen, route, SALT_PENCIL[2]));
+    }
+    if d.is_empty() {
+        return d;
+    }
+    format!(
+        "<path fill='none' stroke='{PENCIL}' stroke-opacity='0.18' stroke-width='{:.2}' stroke-linecap='round' stroke-linejoin='round' d='{d}'/>\n",
+        PEN_WIDTH * 1.5
+    )
 }
 
 /// Red discs outlined in ink, wobbled like the walls, for the entrance and
