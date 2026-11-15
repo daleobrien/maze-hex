@@ -6,3 +6,4 @@ pub mod debug_svg;
 pub mod geometry;
 pub mod rng;
 pub mod tiling;
+pub mod track;
