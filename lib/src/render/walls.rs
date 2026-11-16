@@ -46,7 +46,7 @@ pub fn wall_strokes(maze: &Maze, skip_bridges: bool) -> Vec<Stroke> {
             .filter(|&(k, _)| Some(k) != over)
             .map(|(_, b)| b.clone())
             .collect();
-        for wall in geometry.walls(&blocks, &maze.style) {
+        for wall in geometry.walls(&blocks, &maze.style_for(f)) {
             let start = (
                 face.edges[wall.from_side],
                 face.vertices[(wall.from_side + 1) % n],

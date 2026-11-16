@@ -17,6 +17,24 @@ pub struct TrackStyle {
     /// of its round cap (never past the tile's centre). Short dead ends leave
     /// room for other tracks in the same tile.
     pub cap_depth: f64,
+    /// Whether every dead end opens into a ring, as Lubra's entrance and exit
+    /// do. The entrance and exit always have one where it fits.
+    pub circles: bool,
+    /// The ring's outer radius.
+    pub ring_radius: f64,
+    /// The radius of the curve that blends each wall into the ring, so the
+    /// outline never has a corner.
+    pub ring_blend: f64,
+}
+
+impl TrackStyle {
+    /// The same style with rings at every dead end.
+    pub fn with_circles(self) -> Self {
+        TrackStyle {
+            circles: true,
+            ..self
+        }
+    }
 }
 
 impl Default for TrackStyle {
@@ -26,6 +44,9 @@ impl Default for TrackStyle {
             gap: 0.1,
             margin: 0.06,
             cap_depth: 0.3,
+            circles: false,
+            ring_radius: 0.32,
+            ring_blend: 0.08,
         }
     }
 }

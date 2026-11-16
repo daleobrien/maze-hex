@@ -356,6 +356,18 @@ mod tests {
     }
 
     #[test]
+    fn every_single_block_state_is_allowed_with_rings() {
+        let mut clearance = Clearance::new(TrackStyle::default().with_circles());
+        for kind in [Triangle, Square, Hexagon] {
+            let n = kind.sides();
+            for mask in 1u32..(1 << n) {
+                let labels: Vec<u8> = (0..n).map(|i| ((mask >> i) & 1) as u8).collect();
+                assert!(clearance.allows(kind, &labels), "{kind:?} {labels:?}");
+            }
+        }
+    }
+
+    #[test]
     fn the_tight_cases_from_the_plan() {
         let mut clearance = Clearance::new(TrackStyle::default());
         // Two wide arcs back to back: too tight at width 0.4.

@@ -329,19 +329,23 @@ pub fn render(maze: &Maze, options: &SvgOptions) -> String {
         }
     }
 
-    let caps = [maze.entrance, maze.exit].map(|cap| frame.at(maze.cap_centre(cap)));
-    let marker = maze.style.width * SCALE * 0.38;
-    if options.plain {
-        for c in caps {
+    // The entrance and exit: a red dot in the middle of the ring, as in
+    // Lubra, or a smaller one in the cap where no ring fits.
+    for cap in [maze.entrance, maze.exit] {
+        let c = frame.at(maze.cap_centre(cap));
+        let radius = match maze.ring(cap) {
+            Some(ring) => ring.radius * 0.5 * SCALE,
+            None => maze.style.width * SCALE * 0.38,
+        };
+        if options.plain {
             let _ = writeln!(
                 svg,
-                "<circle cx='{:.2}' cy='{:.2}' r='{marker:.2}' fill='{RED}' stroke='{INK}' stroke-width='1.5'/>",
+                "<circle cx='{:.2}' cy='{:.2}' r='{radius:.2}' fill='{RED}' stroke='{INK}' stroke-width='1.5'/>",
                 c.x, c.y
             );
+        } else {
+            svg.push_str(&ink::dot_markup(&[(c.x, c.y)], radius, &pen));
         }
-    } else {
-        let centres: Vec<Point> = caps.iter().map(|c| (c.x, c.y)).collect();
-        svg.push_str(&ink::dot_markup(&centres, marker, &pen));
     }
     svg.push_str("</g>\n");
 
@@ -384,8 +388,11 @@ fn solution_curves(maze: &Maze) -> Vec<Curve> {
             let face = FaceGeometry::of(&maze.tiling, step.face);
             match (step.from, step.to) {
                 (Some(a), Some(b)) => Some(face.centreline(a, b)),
-                (None, Some(b)) => Some(face.centreline_to_cap(b, &maze.style).reversed()),
-                (Some(a), None) => Some(face.centreline_to_cap(a, &maze.style)),
+                (None, Some(b)) => Some(
+                    face.centreline_to_cap(b, &maze.style_for(step.face))
+                        .reversed(),
+                ),
+                (Some(a), None) => Some(face.centreline_to_cap(a, &maze.style_for(step.face))),
                 (None, None) => None,
             }
         })
@@ -521,8 +528,9 @@ mod tests {
 
     #[test]
     fn plain_output_is_unchanged() {
-        // Taken from the plain renderer before ink existed, so adding ink
-        // cannot quietly alter `-P`.
+        // First taken from the plain renderer before ink existed, so adding
+        // ink cannot quietly alter `-P`. Re-taken once, on purpose, when the
+        // entrance and exit gained Lubra's rings.
         let options = SvgOptions {
             solution: true,
             boundaries: true,
@@ -531,7 +539,7 @@ mod tests {
             plain: true,
         };
         let svg = render(&hex_maze_without_crossings(4), &options);
-        assert_eq!((svg.len(), fnv(&svg)), (17709, 0x1ff0_aff1_c4cc_6b7a));
+        assert_eq!((svg.len(), fnv(&svg)), (17757, 5382114260172183597));
     }
 
     #[test]

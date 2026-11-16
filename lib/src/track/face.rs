@@ -21,6 +21,16 @@ pub struct FaceGeometry {
     vertices: Vec<V2>,
 }
 
+/// The ring at the end of a dead end.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Ring {
+    pub centre: V2,
+    pub radius: f64,
+    /// How far before the ring's centre (towards the side) the blend curves'
+    /// centres sit.
+    rise: f64,
+}
+
 /// A wall from one side point to another, made of one or more curves.
 #[derive(Clone, Debug)]
 pub struct Wall {
@@ -140,12 +150,89 @@ impl FaceGeometry {
         self.between(p, self.midpoint(p), q, self.midpoint(q))
     }
 
-    /// The centreline of a dead end from side `p` to its cap centre.
+    /// The centreline of a dead end from side `p` to its end: the centre of
+    /// its ring or cap.
     pub fn centreline_to_cap(&self, p: usize, style: &TrackStyle) -> Curve {
         Curve::Line {
             from: self.midpoint(p),
-            to: self.cap_centre(p, style.cap_depth),
+            to: self.dead_end_centre(p, style),
         }
+    }
+
+    /// Where a dead end entered by side `p` ends: its ring's centre if it has
+    /// one, otherwise its round cap's.
+    pub fn dead_end_centre(&self, p: usize, style: &TrackStyle) -> V2 {
+        match self.ring(p, style) {
+            Some(ring) => ring.centre,
+            None => self.cap_centre(p, style.cap_depth),
+        }
+    }
+
+    /// The ring a dead end entered by side `p` opens into, if `style` asks
+    /// for rings and one fits in this tile. Triangles are too small for one.
+    pub fn ring(&self, p: usize, style: &TrackStyle) -> Option<Ring> {
+        if !style.circles {
+            return None;
+        }
+        let (half, radius, blend) = (style.width / 2.0, style.ring_radius, style.ring_blend);
+        if radius <= half {
+            return None;
+        }
+        // The blend circle touches the wall line and the ring from outside;
+        // `rise` is how far its centre sits before the ring's centre.
+        let rise = ((radius + blend).powi(2) - (half + blend).powi(2)).sqrt();
+        let depth = style.cap_depth.max(rise + 0.02);
+        let centre = self.midpoint(p).plus(self.inward(p).scale(depth));
+        let fits = (0..self.sides())
+            .filter(|&side| side != p)
+            .all(|side| self.inside_distance(centre, side) >= radius + style.margin);
+        let deep_enough =
+            self.inside_distance(centre, p) <= self.inside_distance(self.centre(), p) + 1e-9;
+        (fits && deep_enough).then_some(Ring {
+            centre,
+            radius,
+            rise,
+        })
+    }
+
+    /// The wall of a dead end with a ring: straight in, a small blend, round
+    /// the far side of the ring, the mirror blend and straight out.
+    fn ring_wall(&self, p: usize, ring: Ring, style: &TrackStyle) -> Vec<Curve> {
+        let (t, n) = (self.direction(p), self.inward(p));
+        let (half, blend) = (style.width / 2.0, style.ring_blend);
+        let m = self.midpoint(p);
+        // A point `u` along the side and `v` into the tile from its midpoint.
+        let at = |u: f64, v: f64| m.plus(t.scale(u)).plus(n.scale(v));
+        let depth = ring.centre.minus(m).dot(n);
+        let mut curves = Vec::new();
+        let mut last = at(half, 0.0);
+        for (k, sign) in [1.0, -1.0].into_iter().enumerate() {
+            let blend_centre = at(sign * (half + blend), depth - ring.rise);
+            let on_line = at(sign * half, depth - ring.rise);
+            let towards = blend_centre.minus(ring.centre);
+            let on_ring = ring
+                .centre
+                .plus(towards.scale(ring.radius / towards.length()));
+            if k == 0 {
+                curves.push(Curve::Line {
+                    from: last,
+                    to: on_line,
+                });
+                curves.push(Curve::arc_short(blend_centre, on_line, on_ring));
+                last = on_ring;
+            } else {
+                // Round the far side of the ring, away from side p.
+                curves.push(Curve::arc_through(ring.centre, last, on_ring, |q| {
+                    q.minus(ring.centre).dot(n) > 0.0
+                }));
+                curves.push(Curve::arc_short(blend_centre, on_ring, on_line));
+                curves.push(Curve::Line {
+                    from: on_line,
+                    to: at(-half, 0.0),
+                });
+            }
+        }
+        curves
     }
 
     /// The wall from side `p`'s ahead point to side `q`'s behind point, going
@@ -155,7 +242,10 @@ impl FaceGeometry {
         let width = style.width;
         let a = self.side_point(p, true, width);
         let b = self.side_point(q, false, width);
-        let curves = if p == q {
+        let ring = if p == q { self.ring(p, style) } else { None };
+        let curves = if let Some(ring) = ring {
+            self.ring_wall(p, ring, style)
+        } else if p == q {
             let centre = self.cap_centre(p, style.cap_depth);
             let tp = self.direction(p);
             let half = width / 2.0;
@@ -258,6 +348,32 @@ mod tests {
                 face.wall(0, half, &style(0.4)).curves[0],
                 Curve::Line { .. }
             ));
+        }
+    }
+
+    #[test]
+    fn rings_fit_squares_and_hexagons_but_not_triangles() {
+        let ringed = TrackStyle::default().with_circles();
+        assert!(regular(3).ring(0, &ringed).is_none());
+        for n in [4, 6] {
+            let face = regular(n);
+            let ring = face.ring(0, &ringed).expect("a ring fits");
+            assert!((ring.radius - ringed.ring_radius).abs() < 1e-12);
+            assert!(
+                face.ring(0, &TrackStyle::default()).is_none(),
+                "rings are opt-in"
+            );
+            // The ringed dead end is one unbroken wall, inside the tile, and
+            // its end is the ring's centre.
+            let wall = face.wall(0, 0, &ringed);
+            assert_eq!(wall.curves.len(), 5);
+            for pair in wall.curves.windows(2) {
+                assert!(pair[0].end().distance(pair[1].start()) < 1e-9);
+            }
+            for curve in &wall.curves {
+                assert!(curve.sample(0.02).into_iter().all(|pt| face.contains(pt)));
+            }
+            assert!(face.dead_end_centre(0, &ringed).distance(ring.centre) < 1e-12);
         }
     }
 

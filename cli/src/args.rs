@@ -121,6 +121,7 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
             "-N" | "--numbers" => options.numbers = true,
             "-T" | "--ports" => options.ports = true,
             "-P" | "--plain" => options.plain = true,
+            "-C" | "--circles" => options.style.circles = true,
             "--track-width" => options.style.width = positive(arg, &mut rest)?,
             "--cap-depth" => options.style.cap_depth = at_least_zero(arg, &mut rest)?,
             "--mode" => {
@@ -276,6 +277,8 @@ usage: maze-hex [options]
   -N, --numbers       draw each tile's number
   -T, --ports         draw a dot on every open port
   -P, --plain         even black walls instead of hand-drawn ink
+  -C, --circles       end every dead end in a ring (the entrance and exit
+                      always have one where it fits)
   --track-width F     width of the track (default {track_width})
   --cap-depth F       how far a dead end reaches into its tile (default {cap_depth})
   --mode MODE         pass-through or hub (default pass-through); hub puts one
@@ -359,6 +362,7 @@ mod tests {
             "-N",
             "-T",
             "-P",
+            "-C",
             "--track-width",
             "0.25",
             "--cap-depth",
@@ -387,6 +391,7 @@ mod tests {
         assert!(o.solution && o.boundaries && o.numbers && o.ports && o.plain);
         assert_eq!(o.style.width, 0.25);
         assert_eq!(o.style.cap_depth, 0.5);
+        assert!(o.style.circles);
         assert_eq!(o.generate.mode, TrackMode::Hub);
         assert_eq!(o.generate.algorithm, Algorithm::Prim);
         assert_eq!(o.generate.pass_through, 0.2);

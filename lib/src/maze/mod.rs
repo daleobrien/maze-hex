@@ -17,7 +17,7 @@ use crate::rng::Rng;
 use crate::tiling::Tiling;
 use crate::track::clearance::{blocks_of, bridge_of, Clearance};
 use crate::track::curve::V2;
-use crate::track::face::FaceGeometry;
+use crate::track::face::{FaceGeometry, Ring};
 use crate::track::TrackStyle;
 
 /// Two tracks crossing in one tile: indices into that tile's blocks.
@@ -45,6 +45,8 @@ pub struct Maze {
     pub open: Vec<bool>,
     pub entrance: Cap,
     pub exit: Cap,
+    /// Whether the entrance and exit have room for a ring.
+    pub ringed: [bool; 2],
     pub style: TrackStyle,
     /// The seed the maze grew from; the ink pen is seeded with it too, so one
     /// number repeats the whole drawing.
@@ -119,22 +121,57 @@ impl Maze {
                     .map(move |b| Cap { face, side: b[0] })
             })
             .collect();
-        let (entrance, exit) = pick_ends(&tiling, &caps, options.style.cap_depth)?;
+        // The entrance and exit open into rings, as in Lubra. A ring needs more
+        // room than a plain dead end, so a dead end whose tile still draws
+        // cleanly with one is preferred if it is nearly as close to the
+        // corner; otherwise the nearest dead end keeps its plain cap.
+        let mut ringed = Clearance::new(options.style.with_circles())
+            .with_crossings(options.generate.crossings > 0.0);
+        let roomy: Vec<bool> = caps
+            .iter()
+            .map(|cap| {
+                options.style.circles
+                    || ringed.allows(tiling.faces[cap.face].kind, &generated.labels[cap.face])
+            })
+            .collect();
+        let (entrance, exit) = pick_ends(&tiling, &caps, &roomy, options.style.cap_depth)?;
         Some(Maze {
             tiling,
             blocks,
             bridges,
             open,
-            entrance,
-            exit,
+            entrance: entrance.0,
+            exit: exit.0,
+            ringed: [entrance.1, exit.1],
             style: options.style,
             seed: options.seed,
         })
     }
 
-    /// The centre of a dead end's cap, where its marker goes.
+    /// The centre of a dead end's ring or cap, where its marker goes.
     pub fn cap_centre(&self, cap: Cap) -> V2 {
-        FaceGeometry::of(&self.tiling, cap.face).cap_centre(cap.side, self.style.cap_depth)
+        FaceGeometry::of(&self.tiling, cap.face)
+            .dead_end_centre(cap.side, &self.style_for(cap.face))
+    }
+
+    /// How tracks are drawn in tile `face`: the maze's style, with rings at
+    /// the dead ends of the entrance and exit tiles.
+    pub fn style_for(&self, face: usize) -> TrackStyle {
+        let ends = [self.entrance, self.exit];
+        if ends
+            .iter()
+            .zip(self.ringed)
+            .any(|(cap, ringed)| ringed && cap.face == face)
+        {
+            self.style.with_circles()
+        } else {
+            self.style
+        }
+    }
+
+    /// The ring the entrance or exit opens into, if one fits its tile.
+    pub fn ring(&self, cap: Cap) -> Option<Ring> {
+        FaceGeometry::of(&self.tiling, cap.face).ring(cap.side, &self.style_for(cap.face))
     }
 
     /// How many tiles hold no track.
@@ -143,8 +180,19 @@ impl Maze {
     }
 }
 
-/// The dead ends nearest the bottom-left and top-right corners, as in Lubra.
-fn pick_ends(tiling: &Tiling, caps: &[Cap], depth: f64) -> Option<(Cap, Cap)> {
+/// How much further from its corner a dead end with room for a ring may be
+/// than the nearest dead end, and still be chosen instead, in edge lengths.
+const RING_SLACK: f64 = 2.5;
+
+/// The dead ends nearest the bottom-left and top-right corners, as in Lubra,
+/// each with whether it gets a ring: one that has room for a ring (`roomy`)
+/// wins if it is within [`RING_SLACK`] of the nearest.
+fn pick_ends(
+    tiling: &Tiling,
+    caps: &[Cap],
+    roomy: &[bool],
+    depth: f64,
+) -> Option<((Cap, bool), (Cap, bool))> {
     if caps.len() < 2 {
         return None;
     }
@@ -156,17 +204,21 @@ fn pick_ends(tiling: &Tiling, caps: &[Cap], depth: f64) -> Option<(Cap, Cap)> {
     let max = points.iter().fold(V2::new(f64::MIN, f64::MIN), |m, p| {
         V2::new(m.x.max(p.x), m.y.max(p.y))
     });
-    let nearest = |corner: V2, skip: Option<Cap>| {
+    let nearest = |corner: V2, skip: Option<Cap>, only_roomy: bool| {
         caps.iter()
-            .filter(|&&c| Some(c) != skip)
-            .min_by(|a, b| {
-                centre(a)
-                    .distance(corner)
-                    .total_cmp(&centre(b).distance(corner))
-            })
-            .copied()
+            .zip(roomy)
+            .filter(|&(&c, &r)| Some(c) != skip && (r || !only_roomy))
+            .map(|(&c, &r)| (c, r, centre(&c).distance(corner)))
+            .min_by(|a, b| a.2.total_cmp(&b.2))
     };
-    let entrance = nearest(min, None)?;
-    let exit = nearest(max, Some(entrance))?;
+    let pick = |corner: V2, skip: Option<Cap>| {
+        let any = nearest(corner, skip, false)?;
+        match nearest(corner, skip, true) {
+            Some((cap, _, distance)) if distance <= any.2 + RING_SLACK => Some((cap, true)),
+            _ => Some((any.0, any.1)),
+        }
+    };
+    let entrance = pick(min, None)?;
+    let exit = pick(max, Some(entrance.0))?;
     Some((entrance, exit))
 }

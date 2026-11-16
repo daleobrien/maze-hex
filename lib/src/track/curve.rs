@@ -163,6 +163,25 @@ impl Curve {
         }
     }
 
+    /// The shorter arc round `centre` from `from` to `to`.
+    pub fn arc_short(centre: V2, from: V2, to: V2) -> Curve {
+        let start = (from.y - centre.y).atan2(from.x - centre.x);
+        let end = (to.y - centre.y).atan2(to.x - centre.x);
+        let mut sweep = end - start;
+        while sweep > PI {
+            sweep -= 2.0 * PI;
+        }
+        while sweep <= -PI {
+            sweep += 2.0 * PI;
+        }
+        Curve::Arc {
+            centre,
+            radius: from.distance(centre),
+            start,
+            sweep,
+        }
+    }
+
     /// An arc round `centre` from `from` to `to` (both on the same circle),
     /// going the way that passes through `via_side`: the arc whose midpoint
     /// makes `via_side` return true, trying the shorter way first.
