@@ -49,8 +49,8 @@ impl Default for GenerateOptions {
             mode: Mode::PassThrough,
             algorithm: Algorithm::Wilson,
             pass_through: 0.7,
-            crossings: 0.5,
-            junctions: 0.3,
+            crossings: 0.8,
+            junctions: 0.1,
             straightness: 0.3,
         }
     }

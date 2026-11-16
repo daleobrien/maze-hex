@@ -315,7 +315,7 @@ crossing, drawn as a bridge.
   the other. At width 0.4 a square has one bridge state (the straight cross) and
   a hexagon 39.
 - **Generation.** Before the sweeps, each tile of four or more sides gets a
-  bridge with probability `--crossings` (default 0.5): two crossing chords
+  bridge with probability `--crossings` (default 0.8): two crossing chords
   picked at random from those that draw cleanly. Bridges must come first: once
   the sweeps have joined a tile's ports into one tree, a crossing track would
   close a loop. The sweeps then grow the rest of the maze round them. Setting
@@ -497,6 +497,6 @@ Still to add, by phase:
 | Where the repo lives | `~/Code/maze-hex` |
 | Ink pen | Copy Lubra's `ink.rs` for now; a shared crate can come later |
 | Crossings | Allowed in tiles of four or more sides, as bridges (§4.4) |
-| Bridges over hubs | Favoured: `--junctions` (default 0.3) keeps a junction of n sides early on with probability junctions^(n−2), and `--crossings` defaults to 0.5. On hexagons: bridges 14% → 32% of tiles, junction tiles 58% → 40%, half the dead ends |
+| Bridges over hubs | Favoured: `--junctions` keeps a junction of n sides early on with probability junctions^(n−2). Defaults raised twice, to `--crossings 0.8 --junctions 0.1`. On 30×20 hexagons, bridges went from 14% of tiles (0.3 and 1) to 33% (0.5 and 0.3) to 46%, junction tiles from 58% to 40% to 25%, and dead ends per 100 tiles from 117 to 62 to 41. The random mix stays near 12% bridges, because triangles can't hold one and squares only fit the straight cross |
 | Pentagons | None. A regular pentagon (108° corners) can't meet triangles, squares or hexagons with equal edges, or tile the plane, so it would need gaps and √5 coordinates; the house pentagon (square + triangle) was built and then removed, as only regular pentagons were wanted |
 | Track ends | The entrance and exit open into Lubra's ring with a red dot, where a ring fits nearly as close to the corner; `-C`/`--circles` rings every dead end (not in triangles: no room) |

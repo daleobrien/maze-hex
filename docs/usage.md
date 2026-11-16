@@ -64,9 +64,9 @@ usage: maze-hex [options]
   --algorithm NAME    hub mode only: wilson, backtracker, kruskal or prim (default wilson)
   --pass-through F    how often a tile may take a second track, 0 to 1 (default 0.7)
   --crossings F       how often a track may cross another as a bridge, 0 to 1
-                      (default 0.5); tiles of four or more sides only
+                      (default 0.8); tiles of four or more sides only
   --junctions F       how readily tracks join into junctions, 0 to 1 (default
-                      0.3); lower favours bridges and through-tracks
+                      0.1); lower favours bridges and through-tracks
   --straightness F    preference for going straight through a tile, 0 to 1 (default 0.3)
   -h, --help          print this help and exit
 ```
