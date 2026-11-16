@@ -20,7 +20,7 @@ use std::fmt::Write as _;
 /// The ink, the pencil used for the route and end markers, and the paper
 /// inside a track.
 const INK: &str = "#2b2118";
-const PENCIL: &str = "#c0392b";
+pub const PENCIL: &str = "#c0392b";
 pub const PAPER: &str = "#ffffff";
 
 /// The middle pen width in pixels (the plain walls are 2.5).
@@ -181,9 +181,10 @@ pub fn wall_markup(lines: &[(Vec<Point>, bool)], pen: &Pen) -> String {
     out
 }
 
-/// The route pencilled in red and gone over twice, each time a little
-/// differently, as in Lubra.
-pub fn pencil_markup(route: &[Point], pen: &Pen) -> String {
+/// A route pencilled in `colour` and gone over twice, each time a little
+/// differently, as in Lubra. The solution uses [`PENCIL`] red; the player's
+/// trail and previews use their own colours.
+pub fn pencil_markup(route: &[Point], pen: &Pen, colour: &str) -> String {
     let mut out = String::new();
     for (salt, width) in SALT_PENCIL[..2]
         .iter()
@@ -193,7 +194,7 @@ pub fn pencil_markup(route: &[Point], pen: &Pen) -> String {
         push_polyline(&mut d, &wobbled(pen, route, *salt));
         let _ = writeln!(
             out,
-            "<path fill='none' stroke='{PENCIL}' stroke-opacity='0.45' stroke-width='{width:.2}' stroke-linecap='round' stroke-linejoin='round' d='{d}'/>"
+            "<path fill='none' stroke='{colour}' stroke-opacity='0.45' stroke-width='{width:.2}' stroke-linecap='round' stroke-linejoin='round' d='{d}'/>"
         );
     }
     out
@@ -201,7 +202,7 @@ pub fn pencil_markup(route: &[Point], pen: &Pen) -> String {
 
 /// The route where it passes under a bridge: pencilled once, lightly, over
 /// the track on top, as Lubra (and maze-rs before it) does.
-pub fn faint_pencil_markup(routes: &[Vec<Point>], pen: &Pen) -> String {
+pub fn faint_pencil_markup(routes: &[Vec<Point>], pen: &Pen, colour: &str) -> String {
     let mut d = String::new();
     for route in routes {
         push_polyline(&mut d, &wobbled(pen, route, SALT_PENCIL[2]));
@@ -210,7 +211,7 @@ pub fn faint_pencil_markup(routes: &[Vec<Point>], pen: &Pen) -> String {
         return d;
     }
     format!(
-        "<path fill='none' stroke='{PENCIL}' stroke-opacity='0.18' stroke-width='{:.2}' stroke-linecap='round' stroke-linejoin='round' d='{d}'/>\n",
+        "<path fill='none' stroke='{colour}' stroke-opacity='0.18' stroke-width='{:.2}' stroke-linecap='round' stroke-linejoin='round' d='{d}'/>\n",
         PEN_WIDTH * 1.5
     )
 }
