@@ -29,8 +29,6 @@ pub struct Options {
     pub shape: Shape,
     /// Weights of triangles, squares and hexagons for `--tiling random`.
     pub mix: Option<[f64; 3]>,
-    /// How many square–triangle pairs to merge into house pentagons, 0 to 1.
-    pub pentagons: f64,
     /// The file name without its extension; `.svg` is added if missing.
     pub output: String,
     pub solution: bool,
@@ -56,7 +54,6 @@ impl Default for Options {
             height: 20.0,
             shape: Shape::Rectangle,
             mix: None,
-            pentagons: 0.0,
             output: "maze".to_string(),
             solution: false,
             boundaries: false,
@@ -118,7 +115,6 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
                 };
             }
             "--mix" => options.mix = Some(mix(arg, &mut rest)?),
-            "--pentagons" => options.pentagons = fraction(arg, &mut rest)?,
             "-o" | "--output" => options.output = value(arg, &mut rest)?.to_string(),
             "-S" | "--solution" => options.solution = true,
             "-B" | "--boundaries" => options.boundaries = true,
@@ -275,8 +271,6 @@ usage: maze-hex [options]
   --mix T,S,H         with --tiling random: how much of each shape, as three weights for
                       triangles, squares and hexagons (default {mix}). A pull, not an exact
                       ratio; squares and hexagons cannot meet without triangles
-  --pentagons F       0 to 1 (default {pentagons}): merges a square and a triangle that share an
-                      edge into a house-shaped pentagon; F is how often to try
   -o, --output NAME   file to write, NAME.svg (default {output})
   -S, --solution      draw the route from entrance to exit in red
   -B, --boundaries    draw faint tile outlines
@@ -303,7 +297,6 @@ usage: maze-hex [options]
         height = d.height,
         output = d.output,
         mix = mix_text(),
-        pentagons = d.pentagons,
         track_width = d.style.width,
         cap_depth = d.style.cap_depth,
         algorithm = d.generate.algorithm.name(),
@@ -576,19 +569,6 @@ mod tests {
     }
 
     #[test]
-    fn pentagons_is_a_fraction_that_defaults_to_none() {
-        assert_eq!(parse_strs(&[]).unwrap().pentagons, 0.0);
-        assert_eq!(parse_strs(&["--pentagons", "0.5"]).unwrap().pentagons, 0.5);
-        assert_eq!(parse_strs(&["--pentagons", "1"]).unwrap().pentagons, 1.0);
-        for bad in ["-0.1", "1.5", "lots", ""] {
-            assert!(parse_strs(&["--pentagons", bad]).is_err(), "{bad}");
-        }
-        assert!(parse_strs(&["--pentagons"]).is_err());
-        // It works with any tiling, so no other flag is needed.
-        assert!(parse_strs(&["--tiling", "snub-square", "--pentagons", "1"]).is_ok());
-    }
-
-    #[test]
     fn output_gets_an_svg_extension_once() {
         assert_eq!(output_path("maze"), "maze.svg");
         assert_eq!(output_path("maze.svg"), "maze.svg");
@@ -605,7 +585,6 @@ mod tests {
             "-H, --height",
             "--shape",
             "--mix",
-            "--pentagons",
             "-o, --output",
             "-S, --solution",
             "-B, --boundaries",

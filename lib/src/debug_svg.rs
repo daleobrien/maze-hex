@@ -14,7 +14,6 @@ fn fill(kind: PolygonKind) -> &'static str {
         PolygonKind::Triangle => "#f4d58d",
         PolygonKind::Square => "#a8d5ba",
         PolygonKind::Hexagon => "#9cc3e4",
-        PolygonKind::Pentagon => "#e4a5b8",
     }
 }
 

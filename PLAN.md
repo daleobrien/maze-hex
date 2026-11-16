@@ -67,7 +67,6 @@ edges. ✅ means it is in `lib/src/tiling/catalogue.rs` and passes the tests now
 | Square–triangle quasicrystal, with hexagon merges | 12-fold | all three | phase 4, still to do (§2.1; inflation by 2+√3, still exact) |
 | Grown mix with a chosen ratio | – | all three | ✅ `random` (`grow.rs`, `--mix T,S,H`) |
 | 2-uniform tilings (the 20 using 3/4/6) | e.g. [3⁶; 3².4.3.4] | mixed | phase 8 |
-| House pentagons (square + triangle merged) | – | any tiling with squares and triangles | ✅ `--pentagons F` (`pentagon.rs`) |
 | Rhombus tilings | – | equilateral, 30° angles | phase 8 |
 
 ![The tilings built so far](docs/tilings.png)
@@ -447,7 +446,7 @@ Each phase ends with `make lint` clean: no build warnings, `cargo fmt`, and
 | 5 | Ink ✅ | copy `ink.rs` from Lubra (pen wobble, width wander, red pencil solution), chained strokes, `-P` plain | ink mazes look like Lubra's; walls are one continuous line |
 | 6 | Outputs and web | `png` feature, wasm build, `--plotter`; add `?maze=hex` to maze.do.id.au as a third wasm, next to the maze-rs and Lubra ones | playable at maze.do.id.au; S3 deploy via the existing GitHub Action |
 | 7 | Documents | README in Lubra's style (cover image, Play link, quick start, documents table), `docs/drawing.md`, `docs/settings.md`, Typst design notes with every tiling, curve case and allowed state | `make doc` builds the PDFs |
-| 8 | Stretch | the grown mix with a chosen ratio, 2-uniform tilings, rhombus and house-pentagon tilings, Bézier fallback curves, shaped regions or image masks, Penrose and Cairo (needs Q(√5) or floats) | – |
+| 8 | Stretch | the grown mix with a chosen ratio, 2-uniform tilings, rhombus tilings, Bézier fallback curves, shaped regions or image masks, Penrose and Cairo (needs Q(√5) or floats) | – |
 
 ## 7. Tests
 
@@ -499,5 +498,5 @@ Still to add, by phase:
 | Ink pen | Copy Lubra's `ink.rs` for now; a shared crate can come later |
 | Crossings | Allowed in tiles of four or more sides, as bridges (§4.4) |
 | Bridges over hubs | Favoured: `--junctions` (default 0.3) keeps a junction of n sides early on with probability junctions^(n−2), and `--crossings` defaults to 0.5. On hexagons: bridges 14% → 32% of tiles, junction tiles 58% → 40%, half the dead ends |
-| Pentagons | Yes: the house pentagon (square + triangle, angles 90, 90, 150, 60, 150), by merging a square and a triangle that share an edge, on any tiling (`--pentagons F`); always numbered from its 60° apex so clearance can be cached |
+| Pentagons | None. A regular pentagon (108° corners) can't meet triangles, squares or hexagons with equal edges, or tile the plane, so it would need gaps and √5 coordinates; the house pentagon (square + triangle) was built and then removed, as only regular pentagons were wanted |
 | Track ends | The entrance and exit open into Lubra's ring with a red dot, where a ring fits nearly as close to the corner; `-C`/`--circles` rings every dead end (not in triangles: no room) |

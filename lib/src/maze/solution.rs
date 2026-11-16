@@ -210,35 +210,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn pentagon_mixes_give_one_tree_with_a_route() {
-        use crate::maze::generate::Mode;
-        use crate::tiling::pentagon::merge_pentagons;
-        for mode in [Mode::PassThrough, Mode::Hub] {
-            for seed in 1..5 {
-                let region = Region::rectangle(20.0, 14.0);
-                let base = source_by_name("random")
-                    .expect("random exists")
-                    .build(region, &mut Rng::new(seed));
-                let tiling = merge_pentagons(&base, 0.6, &mut Rng::new(seed ^ 0x70656e74));
-                let pentagons = tiling
-                    .faces
-                    .iter()
-                    .filter(|f| f.kind == crate::tiling::PolygonKind::Pentagon)
-                    .count();
-                assert!(pentagons > 3, "seed {seed}: {pentagons} pentagons");
-                let mut options = MazeOptions {
-                    seed,
-                    ..MazeOptions::default()
-                };
-                options.generate.mode = mode;
-                let maze = Maze::generate(tiling, &options).expect("room for a maze");
-                assert!(maze.is_one_tree(), "{mode:?} seed {seed}");
-                assert!(maze.solution().len() >= 2, "{mode:?} seed {seed}");
-            }
-        }
-    }
-
     /// A maze with crossings off, which repeats the mazes made before
     /// bridges existed.
     fn maze_without_crossings(name: &str, seed: u64) -> Maze {
