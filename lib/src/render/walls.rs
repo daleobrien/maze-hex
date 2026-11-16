@@ -1,4 +1,4 @@
-//! Walls chained across tiles into long strokes (PLAN §5.3).
+//! Walls chained across tiles into long strokes (docs/design.md §5.3).
 //!
 //! Every wall starts at one side point and ends at another. A side point on an
 //! open edge is where one tile's wall ends and the neighbour's wall begins, so

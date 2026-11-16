@@ -60,4 +60,4 @@ different every time:
 `circle`, `-W` by `-H` edge lengths, keeping the largest piece and smoothing
 its edge.
 
-[PLAN.md](../PLAN.md#2-which-tilings) has the tilings still to come.
+[The design](design.md#future-work) lists the tilings still to come.

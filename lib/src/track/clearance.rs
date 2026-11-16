@@ -1,4 +1,4 @@
-//! Which tile states can be drawn cleanly (PLAN §5.4).
+//! Which tile states can be drawn cleanly (docs/design.md §5.4).
 //!
 //! A tile state says, for each side, which block (group of joined sides) the
 //! side belongs to, or that it is closed. A state is allowed when its blocks
