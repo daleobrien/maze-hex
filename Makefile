@@ -10,20 +10,22 @@ CLI_ARGS ?= --seed 1 -W 30 -H 20 -B -o maze
 MAZE_ARGS ?= --seed 3 -W 60 -H 40 -o maze
 SAMPLE_ARGS ?= --seed 1 -W 30 -H 20
 RANDOM_ARGS ?= --tiling random --mix 1,1,1 --seed 1 -W 30 -H 20 -S -o random
+PENTAGONS_ARGS ?= --tiling random --pentagons 0.5 --seed 1 -W 30 -H 20 -S -o pentagons
 
 .DEFAULT_GOAL := help
-.PHONY: help build test lint fmt tilings cli random maze sample
+.PHONY: help build test lint fmt tilings cli random pentagons maze sample
 
 help:
-	@echo "  make build    build everything"
-	@echo "  make test     run the tests"
-	@echo "  make lint     cargo fmt --check and clippy with warnings as errors"
-	@echo "  make fmt      format the code"
-	@echo "  make tilings  draw every tiling in the catalogue into docs/tilings/"
-	@echo "  make cli      run the maze-hex command in cli/ (CLI_ARGS to change its flags)"
-	@echo "  make random   draw a maze on a random mix of triangles, squares and hexagons (RANDOM_ARGS)"
-	@echo "  make maze     time one run of maze-hex (MAZE_ARGS to change its flags)"
-	@echo "  make sample   write docs/sample.svg, docs/sample-solved.svg and docs/sample-mixed.svg and docs/sample-random.svg"
+	@echo "  make build      build everything"
+	@echo "  make test       run the tests"
+	@echo "  make lint       cargo fmt --check and clippy with warnings as errors"
+	@echo "  make fmt        format the code"
+	@echo "  make tilings    draw every tiling in the catalogue into docs/tilings/"
+	@echo "  make cli        run the maze-hex command in cli/ (CLI_ARGS to change its flags)"
+	@echo "  make random     draw a maze on a random mix of triangles, squares and hexagons (RANDOM_ARGS)"
+	@echo "  make pentagons  draw a maze with square-triangle pairs merged into house pentagons (PENTAGONS_ARGS)"
+	@echo "  make maze       time one run of maze-hex (MAZE_ARGS to change its flags)"
+	@echo "  make sample     write docs/sample.svg, docs/sample-solved.svg and docs/sample-mixed.svg and docs/sample-random.svg"
 
 build:
 	$(CARGO) build --workspace
@@ -47,6 +49,9 @@ cli:
 
 random:
 	cd cli && $(CARGO) run --release -- $(RANDOM_ARGS)
+
+pentagons:
+	cd cli && $(CARGO) run --release -- $(PENTAGONS_ARGS)
 
 maze:
 	$(CARGO) build --release -p cli
