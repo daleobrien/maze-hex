@@ -26,6 +26,18 @@ the ports: the middles of the edges a track may cross.*
 | `row-mix-hexagon` | random | `row-mix`, with triangles merged into hexagons |
 | `random` | random | all three, grown tile by tile |
 
+## A maze on each
+
+The same seed on every tiling, with the default settings (bridges where a tile
+has room for one, `--crossings 0.8 --junctions 0.1`), without the solution.
+Hexagons weave the most; triangles have no room for a bridge, so the
+triangular maze is all twists; squares fit only a straight cross.
+
+![A maze on every tiling](mazes.png)
+
+*`make gallery` draws this (`--seed 3 -W 18 -H 12`; set `GALLERY_ARGS` to
+change it).*
+
 ## Random mixes
 
 The first eight repeat a unit cell, so they look orderly. The last four are

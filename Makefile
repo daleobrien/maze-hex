@@ -12,7 +12,7 @@ SAMPLE_ARGS ?= --seed 1 -W 30 -H 20
 RANDOM_ARGS ?= --tiling random --mix 1,1,1 --seed 1 -W 30 -H 20 -S -o random
 
 .DEFAULT_GOAL := help
-.PHONY: cover help build test lint fmt tilings cli random maze sample
+.PHONY: cover gallery help build test lint fmt tilings cli random maze sample
 
 help:
 	@echo "  make build    build everything"
@@ -25,6 +25,7 @@ help:
 	@echo "  make maze     time one run of maze-hex (MAZE_ARGS to change its flags)"
 	@echo "  make sample   write docs/sample.svg, docs/sample-solved.svg and docs/sample-mixed.svg and docs/sample-random.svg"
 	@echo "  make cover    write docs/cover.png, the 1280x640 card the README and daleobrien.github.io show"
+	@echo "  make gallery  write docs/mazes.png, one maze on every tiling, for docs/tilings.md"
 
 build:
 	$(CARGO) build --workspace
@@ -70,3 +71,21 @@ cover:
 		-draw "roundrectangle 1,1 1278,638 18,18" \
 		\( /tmp/maze-hex-cover.png -resize 1130x540 \) -gravity center -composite \
 		-colors 256 docs/cover.png
+
+# One maze on every tiling, in a grid of three across, for docs/tilings.md:
+# the default settings and one seed, without the solution. Needs rsvg-convert
+# and ImageMagick.
+GALLERY_ARGS ?= --seed 3 -W 18 -H 12
+GALLERY_DIR := /tmp/maze-hex-gallery
+gallery:
+	$(CARGO) build --release -p cli
+	rm -rf $(GALLERY_DIR) && mkdir -p $(GALLERY_DIR)
+	for t in $$(target/release/maze-hex --tiling list); do \
+		target/release/maze-hex --tiling $$t $(GALLERY_ARGS) -o $(GALLERY_DIR)/$$t || exit 1; \
+		rsvg-convert -b white -w 420 $(GALLERY_DIR)/$$t.svg -o $(GALLERY_DIR)/$$t.png; \
+		convert $(GALLERY_DIR)/$$t.png -resize 420x290 -gravity center -background white \
+			-extent 420x290 -gravity north -splice 0x30 -pointsize 19 -annotate +0+6 "$$t" \
+			$(GALLERY_DIR)/$$t.png; \
+	done
+	montage $$(for t in $$(target/release/maze-hex --tiling list); do echo $(GALLERY_DIR)/$$t.png; done) \
+		-tile 3x -geometry +10+10 -background white +dither -colors 64 docs/mazes.png
