@@ -3,9 +3,10 @@
 <p align="center">Hand-drawn track mazes on hexagons, and on any tiling of equal-edged triangles, squares and hexagons, in Rust.</p>
 
 <p align="center">
-  <a href="PLAN.md"><b>Plan</b></a> &nbsp;·&nbsp;
-  <a href="#quick-start">Quick start</a> &nbsp;·&nbsp;
-  <a href="#how-it-works">How it works</a>
+  <a href="#quick-start"><b>Quick start</b></a> &nbsp;·&nbsp;
+  <a href="#documents">Documents</a> &nbsp;·&nbsp;
+  <a href="#how-it-works">How it works</a> &nbsp;·&nbsp;
+  <a href="PLAN.md">Plan</a>
 </p>
 
 <p align="center">
@@ -13,55 +14,45 @@
 </p>
 
 maze-hex is a sibling of [Lubra](https://github.com/daleobrien/lubra). It also
-makes winding tracks drawn in ink, but tracks only ever join a tile at the
-middle of an edge, so there are no fragments to generate. Tracks can still
-cross in tiles of four or more sides, as bridges, and each bridge is drawn
-inside its own tile, so there is no drawing order to worry about. Every edge in a tiling has the
-same length, so a track can pass from a hexagon to a square to a triangle with
-the same width.
-
-**Status:** phases 1–3 and 5 of [PLAN.md](PLAN.md) are done. Mazes draw in
-hand-drawn ink on eleven tilings, including random mixes of triangles, squares
-and hexagons, in pass-through or hub mode. Next: the web build for
-maze.do.id.au.
-
-<p align="center">
-  <img src="docs/sample-mixed.svg" alt="A maze on a random mix of triangles and hexagons" width="100%">
-</p>
+makes winding tracks drawn in ink, but a track only ever joins a tile at the
+middle of an edge, and every edge in a tiling is the same length, so a track
+can pass from a hexagon to a square to a triangle at the same width. Tracks
+can cross in tiles of four or more sides, as bridges, each drawn inside its
+own tile. It draws on twelve tilings, from plain hexagons to random mixes of
+all three shapes, and is coming to [maze.do.id.au](https://maze.do.id.au) as
+its third kind of maze.
 
 ## Quick start
 
 ```bash
-make build     # build everything
-make cli CLI_ARGS="--seed 1 -W 30 -H 20 -S -o maze"   # draw a maze: cli/maze.svg
-make cli CLI_ARGS="--seed 1 -P -o plain"               # hand-drawn ink is the default; -P gives plain walls
-make cli CLI_ARGS="--tiling list"                      # every tiling
-make random    # a maze on a random mix: cli/random.svg; --mix T,S,H sets the triangle:square:hexagon ratio
-make cli CLI_ARGS="--seed 1 -C -S -o rings"             # -C ends every dead end in a ring
-make test      # run the tests
-make lint      # cargo fmt --check and clippy, warnings as errors
-make tilings   # draw every tiling into docs/tilings/
-make           # list every task
+make build                              # build everything
+make cli CLI_ARGS="--seed 1 -S -o maze" # a hexagon maze with its solution: cli/maze.svg
+make random                             # a random mix of all three shapes: cli/random.svg
+make test                               # run the tests
+make lint                               # cargo fmt --check and clippy, warnings as errors
+make                                    # every task
 ```
+
+## Documents
+
+| Document | What's in it |
+| -------- | ------------ |
+| [Drawing mazes](docs/usage.md) | The make tasks, every command-line option, and examples |
+| [Tilings](docs/tilings.md) | The twelve tilings, the random mixes and `--mix` |
+| [How it works](docs/how-it-works.md) | Exact geometry, tracks inside a tile, building the maze, bridges, and drawing the walls |
+| [PLAN.md](PLAN.md) | The design in full, the phases and what is still to do |
 
 ## How it works
 
-- `lib/src/geometry.rs`: exact coordinates. Every edge points in a multiple
-  of 30°, so every vertex is `(a + b√3)/2` for integers `a`, `b`, and
-  neighbouring tiles agree exactly on shared corners.
-- `lib/src/tiling/`: tilings, either a unit cell repeated over a region
-  (hexagonal, square, triangular, 3.6.3.6, 3.4.6.4, 3.3.3.4.4 and the two
-  snubs) or a random mix (`triangle-hexagon`), clipped and smoothed.
-- `lib/src/track/`: the track inside one tile. Every curve is a straight line
-  or an arc round the point where two sides' lines meet. A table says which
-  groupings of a tile's sides can be drawn without walls crowding.
-- `lib/src/maze/`: randomised Kruskal over the tracks' joins, keeping every
-  tile drawable, so a tile can carry two separate tracks, or a bridge where two
-  cross (`--crossings`, default 0.5; `--junctions` favours bridges over hubs).
-- `lib/src/render/`: walls chained across tiles into one continuous line,
-  written as SVG.
-
-![Every tiling so far](docs/tilings.png)
+Every edge points in a multiple of 30°, so every corner can be stored exactly
+and neighbouring tiles agree on the points they share. Inside a tile each
+track is a straight line or an arc between the middles of two edges, and a
+table says which groupings of a tile's edges can be drawn without the walls
+crowding. The maze is a randomised spanning tree over those joins, so one
+tile can carry two separate tracks, a junction, or a bridge where two cross.
+The walls are then chained across tiles into one continuous line and drawn in
+the same hand-drawn ink as Lubra. [How it works](docs/how-it-works.md) has the
+details.
 
 ---
 
