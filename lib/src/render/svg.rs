@@ -38,6 +38,8 @@ const SCALE: f64 = 40.0;
 const PADDING: f64 = 20.0;
 const WALL: &str = "#1d1d1d";
 const RED: &str = PENCIL;
+/// How strongly a track hidden under a bridge shows through it.
+const FAINT: f64 = 0.2;
 
 /// Maps maze coordinates to the flipped group's pixels.
 struct Frame {
@@ -380,8 +382,34 @@ pub fn render(maze: &Maze, options: &SvgOptions) -> String {
         .map(|bridge| drawing.outline(bridge, options.plain))
         .collect();
     let paper = if options.plain { "white" } else { ink::PAPER };
-    for (bridge, outline) in shapes.iter().zip(&outlines) {
+    for (k, (bridge, outline)) in shapes.iter().zip(&outlines).enumerate() {
         let _ = writeln!(svg, "<path fill='{paper}' stroke='none' d='{outline}'/>");
+        // The hidden track's walls, faintly, inside the band only, so a track
+        // can be followed underneath (as the route is, in pencil).
+        let _ = writeln!(
+            svg,
+            "<clipPath id='band{k}'><path d='{outline}'/></clipPath><g clip-path='url(#band{k})' opacity='{FAINT}'>"
+        );
+        if options.plain {
+            let walls: Vec<String> = bridge
+                .under_walls
+                .iter()
+                .map(|s| frame.path(&s.curves, false))
+                .collect();
+            let _ = writeln!(
+                svg,
+                "<path fill='none' stroke='{WALL}' stroke-width='2.5' stroke-linecap='round' d='{}'/>",
+                walls.join("")
+            );
+        } else {
+            let lines: Vec<(Vec<Point>, bool)> = bridge
+                .under_walls
+                .iter()
+                .map(|s| (frame.sampled(&s.curves), false))
+                .collect();
+            svg.push_str(&ink::wall_markup(&lines, pen));
+        }
+        svg.push_str("</g>\n");
         if options.plain {
             let walls: Vec<String> = bridge
                 .walls
@@ -546,6 +574,7 @@ fn solution_curves(maze: &Maze) -> Vec<Curve> {
 mod tests {
     use super::*;
     use crate::maze::MazeOptions;
+    use crate::render::walls::bridges as bridges_of;
     use crate::rng::Rng;
     use crate::tiling::source::source_by_name;
     use crate::tiling::Region;
@@ -688,6 +717,31 @@ mod tests {
                 ..SvgOptions::default()
             };
             assert!(render(&maze, &options).contains(faint), "plain: {plain}");
+        }
+    }
+
+    #[test]
+    fn hidden_tracks_show_faintly_through_their_bridges() {
+        let maze = hex_maze(4);
+        let bridges = maze.bridges.iter().flatten().count();
+        assert!(bridges > 0, "no bridge to test");
+        for plain in [true, false] {
+            let options = SvgOptions {
+                plain,
+                ..SvgOptions::default()
+            };
+            let svg = render(&maze, &options);
+            // One faint, band-clipped group per bridge.
+            assert_eq!(
+                svg.matches("<clipPath id='band").count(),
+                bridges,
+                "plain: {plain}"
+            );
+            assert_eq!(svg.matches(&format!("opacity='{FAINT}'")).count(), bridges);
+        }
+        // Each hidden track is the bridge's lower block: two walls.
+        for shape in bridges_of(&maze) {
+            assert_eq!(shape.under_walls.len(), 2);
         }
     }
 

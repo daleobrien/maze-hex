@@ -99,6 +99,9 @@ pub struct BridgeShape {
     pub face: usize,
     pub outline: Vec<Curve>,
     pub walls: Vec<Stroke>,
+    /// The walls of the track beneath, which the band hides; drawn faintly
+    /// across it, so the track can be followed underneath.
+    pub under_walls: Vec<Stroke>,
 }
 
 /// Every bridge's upper track, to be drawn after everything else in its tile.
@@ -114,6 +117,13 @@ pub fn bridges(maze: &Maze) -> Vec<BridgeShape> {
         let there = geometry.wall(p, q, &maze.style);
         let back = geometry.wall(q, p, &maze.style);
         let width = maze.style.width;
+        let under = &maze.blocks[f][bridge.under];
+        let under_walls = [(under[0], under[1]), (under[1], under[0])]
+            .map(|(a, b)| Stroke {
+                curves: geometry.wall(a, b, &maze.style).curves,
+                closed: false,
+            })
+            .to_vec();
         // Round the band: one wall, across side q, the other wall, across p.
         let mut outline = there.curves.clone();
         outline.push(Curve::Line {
@@ -138,6 +148,7 @@ pub fn bridges(maze: &Maze) -> Vec<BridgeShape> {
                     closed: false,
                 },
             ],
+            under_walls,
         });
     }
     shapes

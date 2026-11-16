@@ -539,7 +539,9 @@ Tiles of four or more sides may hold one crossing, drawn as a bridge.
   doesn't disturb the maze. `Maze::bridges` records which block goes over.
 - **Drawing.** The walls go first (without the upper tracks'). Then each
   bridge paints its upper band in the track colour, covering the lower track,
-  and draws its two walls. The route is drawn once, on top, with an SVG mask
+  draws the lower track's walls faintly (opacity 0.2) clipped to the band, so a
+  hidden track can still be followed underneath, and then draws its own two
+  walls. The route is drawn once, on top, with an SVG mask
   cutting it out of the bands of the bridges it passes under (drawing it twice
   would leave darker blotches where semi-transparent strokes overlap). Where it
   passes under, it shows as a faint trace across the bridge, as in Lubra (§5.7).
