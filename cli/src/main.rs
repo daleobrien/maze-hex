@@ -78,6 +78,7 @@ fn run(options: &Options) -> Result<(), String> {
             numbers: options.numbers,
             ports: options.ports,
             plain: options.plain,
+            overlay_group: false,
         },
     );
     let path = args::output_path(&options.output);
