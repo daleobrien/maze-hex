@@ -2,7 +2,7 @@
 
 [Back to the README](../README.md)
 
-This is a short tour. [PLAN.md](../PLAN.md) has the full design, with the
+This is a short tour. [The design](design.md) has the full story, with the
 numbers behind each rule.
 
 ## Exact geometry

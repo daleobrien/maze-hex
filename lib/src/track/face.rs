@@ -1,4 +1,4 @@
-//! A track inside one tile: its walls and centreline (PLAN §5.1–5.2).
+//! A track inside one tile: its walls and centreline (docs/design.md §5.1–5.2).
 //!
 //! A track crosses side `i` at the side's midpoint `Mᵢ`, at right angles. Its
 //! two walls cross the side at the *side points* `Mᵢ ± (W/2)·tᵢ`, where `tᵢ` is

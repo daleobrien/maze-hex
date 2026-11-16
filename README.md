@@ -6,7 +6,7 @@
   <a href="#quick-start"><b>Quick start</b></a> &nbsp;·&nbsp;
   <a href="#documents">Documents</a> &nbsp;·&nbsp;
   <a href="#how-it-works">How it works</a> &nbsp;·&nbsp;
-  <a href="PLAN.md">Plan</a>
+  <a href="docs/design.md">Design</a>
 </p>
 
 <p align="center">
@@ -40,7 +40,7 @@ make                                    # every task
 | [Drawing mazes](docs/usage.md) | The make tasks, every command-line option, and examples |
 | [Tilings](docs/tilings.md) | The twelve tilings, the random mixes and `--mix` |
 | [How it works](docs/how-it-works.md) | Exact geometry, tracks inside a tile, building the maze, bridges, and drawing the walls |
-| [PLAN.md](PLAN.md) | The design in full, the phases and what is still to do |
+| [Design](docs/design.md) | The design in full: the geometry, the generator, the drawing, the decisions, how it was built and what is still open |
 
 ## How it works
 

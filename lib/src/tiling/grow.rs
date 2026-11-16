@@ -1,4 +1,4 @@
-//! Grown free mix (PLAN §2.1, item 3): triangles, squares and hexagons in an
+//! Grown free mix (docs/design.md §2.1, item 3): triangles, squares and hexagons in an
 //! irregular arrangement, with a chosen ratio. A patch grows outward from one
 //! tile, one tile at a time, and backs up when a corner can no longer be
 //! completed.

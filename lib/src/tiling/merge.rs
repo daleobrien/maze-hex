@@ -1,4 +1,4 @@
-//! Free mix of triangles and hexagons (PLAN §2.1, item 1): start from the
+//! Free mix of triangles and hexagons (docs/design.md §2.1, item 1): start from the
 //! triangular tiling and, in random order, merge the six triangles round a
 //! vertex into one hexagon. Every hexagon is made of real triangles, so the
 //! result is always valid and exact.

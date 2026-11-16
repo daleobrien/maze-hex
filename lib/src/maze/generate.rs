@@ -1,4 +1,4 @@
-//! The pass-through generator (PLAN §4.1): randomised Kruskal over chords.
+//! The pass-through generator (docs/design.md §4.1): randomised Kruskal over chords.
 //!
 //! The nodes are ports (interior edges). A chord joins two sides of one tile.
 //! A chord is accepted when its two ports are in different trees (so no loop
@@ -15,10 +15,10 @@ use crate::track::clearance::{is_crossing, Clearance};
 /// How tracks may share a tile.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Mode {
-    /// A tile may hold several separate tracks (PLAN §4.1).
+    /// A tile may hold several separate tracks (docs/design.md §4.1).
     #[default]
     PassThrough,
-    /// A tile holds one block of all its open sides (PLAN §4.2).
+    /// A tile holds one block of all its open sides (docs/design.md §4.2).
     Hub,
 }
 

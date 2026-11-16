@@ -1,7 +1,7 @@
 # CLAUDE.md
 
-Guidance for AI assistants working on maze-hex. Read PLAN.md first; it is the
-design and the roadmap.
+Guidance for AI assistants working on maze-hex. Read docs/design.md first; it is
+the design, and its §6 lists what is still open.
 
 ## Rules
 
@@ -12,10 +12,10 @@ design and the roadmap.
 - Geometry stays exact (`geometry::Q3`, `geometry::Point`) until drawing. Never
   compare or hash float coordinates; join tiles by exact points or ids.
 - `lib` does no file I/O so it can build for wasm; the CLI does the writing.
-- A tile only ever draws inside itself (PLAN.md §5.4). If a change would let a
+- A tile only ever draws inside itself (docs/design.md §5.4). If a change would let a
   wall leave its tile, fix the clearance table instead of adding drawing order.
 - Follow Lubra's conventions (Makefile tasks, CLI flags, ink style copied from Lubra's `ink.rs`, red
-  entrance/exit markers) unless PLAN.md says otherwise.
+  entrance/exit markers) unless docs/design.md says otherwise.
 - Comments explain why, in plain sentences. No `unwrap` in library code without
   a comment saying why it cannot fail.
 - New tilings go in `lib/src/tiling/catalogue.rs`; the tests there check every

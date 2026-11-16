@@ -1,9 +1,9 @@
-//! Free mix of squares and triangles in horizontal rows (PLAN §2.1, item 2,
+//! Free mix of squares and triangles in horizontal rows (docs/design.md §2.1, item 2,
 //! fallback form). Each row is either a strip of unit squares or a strip of
 //! alternating up and down triangles, chosen at random, so squares, triangles
 //! and (after merging) hexagons all appear in one maze.
 //!
-//! This is not the Stampfli square–triangle inflation the plan prefers: that
+//! This is not the Stampfli square–triangle inflation (docs/design.md §6, Future work): that
 //! needs five marked prototiles and patches that overlap their neighbours, and
 //! the exact rules are only published as pictures. Rows are exact and always
 //! valid, but the pattern is stripes, not a quasicrystal.

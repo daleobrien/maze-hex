@@ -1,4 +1,4 @@
-//! Hub mode (PLAN §4.2): a spanning tree over tiles.
+//! Hub mode (docs/design.md §4.2): a spanning tree over tiles.
 //!
 //! Every tile holds one block of all its open sides, so the maze is a spanning
 //! tree of the dual graph: a node per tile, a link per interior edge. A tile
