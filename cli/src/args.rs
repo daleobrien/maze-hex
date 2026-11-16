@@ -140,6 +140,7 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
             }
             "--pass-through" => options.generate.pass_through = fraction(arg, &mut rest)?,
             "--crossings" => options.generate.crossings = fraction(arg, &mut rest)?,
+            "--junctions" => options.generate.junctions = fraction(arg, &mut rest)?,
             "--straightness" => options.generate.straightness = fraction(arg, &mut rest)?,
             other if other.starts_with('-') => return Err(format!("unknown flag '{other}'")),
             other => return Err(format!("unexpected argument '{other}'")),
@@ -283,6 +284,8 @@ usage: maze-hex [options]
   --pass-through F    how often a tile may take a second track, 0 to 1 (default {pass_through})
   --crossings F       how often a track may cross another as a bridge, 0 to 1
                       (default {crossings}); tiles of four or more sides only
+  --junctions F       how readily tracks join into junctions, 0 to 1 (default
+                      {junctions}); lower favours bridges and through-tracks
   --straightness F    preference for going straight through a tile, 0 to 1 (default {straightness})
   -h, --help          print this help and exit
 ",
@@ -296,6 +299,7 @@ usage: maze-hex [options]
         algorithm = d.generate.algorithm.name(),
         pass_through = d.generate.pass_through,
         crossings = d.generate.crossings,
+        junctions = d.generate.junctions,
         straightness = d.generate.straightness,
     )
 }
@@ -367,6 +371,8 @@ mod tests {
             "0.2",
             "--crossings",
             "0.3",
+            "--junctions",
+            "0.4",
             "--straightness",
             "1",
         ])
@@ -385,6 +391,7 @@ mod tests {
         assert_eq!(o.generate.algorithm, Algorithm::Prim);
         assert_eq!(o.generate.pass_through, 0.2);
         assert_eq!(o.generate.crossings, 0.3);
+        assert_eq!(o.generate.junctions, 0.4);
         assert_eq!(o.generate.straightness, 1.0);
     }
 

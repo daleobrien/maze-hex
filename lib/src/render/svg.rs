@@ -477,6 +477,7 @@ mod tests {
             ..MazeOptions::default()
         };
         options.generate.crossings = 0.0;
+        options.generate.junctions = 1.0;
         Maze::generate(tiling, &options).expect("a maze")
     }
 

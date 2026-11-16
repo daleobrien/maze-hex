@@ -35,6 +35,10 @@ pub struct GenerateOptions {
     /// as a bridge (0 never, 1 whenever it fits). Only tiles of four or more
     /// sides have room.
     pub crossings: f64,
+    /// How readily tracks join into junctions, 0 to 1. Below 1, the first
+    /// sweeps keep a junction of `n` sides with probability `junctions^(n-2)`,
+    /// favouring bridges and through-tracks over hubs of many sides.
+    pub junctions: f64,
     /// How strongly to prefer going straight through a tile (0 no preference).
     pub straightness: f64,
 }
@@ -45,7 +49,8 @@ impl Default for GenerateOptions {
             mode: Mode::PassThrough,
             algorithm: Algorithm::Wilson,
             pass_through: 0.7,
-            crossings: 0.3,
+            crossings: 0.5,
+            junctions: 0.3,
             straightness: 0.3,
         }
     }
@@ -184,6 +189,18 @@ impl State<'_> {
         // when crossings are off, so that setting repeats older mazes exactly.
         if is_crossing(&labels) && (options.crossings <= 0.0 || !rng.chance(options.crossings)) {
             return false;
+        }
+        // In the first sweeps a chord that makes a junction (a block of three
+        // or more sides) is kept only sometimes, and less often the bigger the
+        // junction, so tracks pass through or cross instead of branching. The
+        // later sweeps take any chord they need to finish the tree. At 1 this
+        // draws no random numbers, which repeats older mazes exactly.
+        if check_neighbours && options.junctions < 1.0 {
+            let label = chords[chord.a];
+            let size = chords.iter().filter(|&&l| l == label).count();
+            if size >= 3 && !rng.chance(options.junctions.powi(size as i32 - 2)) {
+                return false;
+            }
         }
         if !self.clearance.allows(kind, &labels) {
             return false;
