@@ -616,6 +616,27 @@ mod tests {
     }
 
     #[test]
+    fn the_overlay_group_is_the_only_difference_it_makes() {
+        for plain in [false, true] {
+            let options = SvgOptions {
+                solution: true,
+                plain,
+                ..SvgOptions::default()
+            };
+            let with = SvgOptions {
+                overlay_group: true,
+                ..options
+            };
+            let maze = hex_maze(4);
+            let (a, b) = (render(&maze, &options), render(&maze, &with));
+            assert_eq!(b.matches("id='overlay'").count(), 1);
+            assert_eq!(b.replace("<g id='overlay'></g>\n", ""), a);
+            // It is the last child of the flipped group.
+            assert!(b.contains("<g id='overlay'></g>\n</g>\n"));
+        }
+    }
+
+    #[test]
     fn ink_overlays_still_draw() {
         let options = SvgOptions {
             boundaries: true,

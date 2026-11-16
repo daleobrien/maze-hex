@@ -5,6 +5,7 @@
 pub mod debug_svg;
 pub mod geometry;
 pub mod maze;
+pub mod play;
 pub mod render;
 pub mod rng;
 pub mod tiling;
