@@ -9,6 +9,6 @@ name = "maze-hex"
 path = "src/main.rs"
 
 # No crates from crates.io: arguments are parsed by hand so the build works
-# offline, and the maze code is the local lib crate.
+# offline, and the maze code is the local maze-hex crate (lib/).
 [dependencies]
-lib = { path = "../lib" }
+maze-hex = { path = "../lib" }

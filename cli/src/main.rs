@@ -6,12 +6,12 @@ use std::process;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use args::{Mode, Options};
-use lib::maze::{Maze, MazeOptions};
-use lib::render::svg::{render, SvgOptions};
-use lib::rng::Rng;
-use lib::tiling::grow::RandomMix;
-use lib::tiling::source::{source_by_name, source_names};
-use lib::tiling::{Region, TilingSource};
+use maze_hex::maze::{Maze, MazeOptions};
+use maze_hex::render::svg::{render, SvgOptions};
+use maze_hex::rng::Rng;
+use maze_hex::tiling::grow::RandomMix;
+use maze_hex::tiling::source::{source_by_name, source_names};
+use maze_hex::tiling::{Region, TilingSource};
 
 fn main() {
     let arguments: Vec<String> = std::env::args().skip(1).collect();

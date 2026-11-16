@@ -2,11 +2,11 @@
 //! `lib`, so there is no argument parser to lean on; the flags are few enough
 //! that a match on each one stays easy to read.
 
-use lib::maze::{Algorithm, GenerateOptions, Mode as TrackMode};
-use lib::tiling::grow::RandomMix;
-use lib::tiling::source::source_by_name;
-use lib::tiling::Shape;
-use lib::track::TrackStyle;
+use maze_hex::maze::{Algorithm, GenerateOptions, Mode as TrackMode};
+use maze_hex::tiling::grow::RandomMix;
+use maze_hex::tiling::source::source_by_name;
+use maze_hex::tiling::Shape;
+use maze_hex::track::TrackStyle;
 
 /// What the program does once the arguments are read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

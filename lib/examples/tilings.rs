@@ -3,11 +3,11 @@
 
 use std::path::PathBuf;
 
-use lib::debug_svg::tiling_svg;
-use lib::rng::Rng;
-use lib::tiling::catalogue;
-use lib::tiling::source::{source_by_name, source_names};
-use lib::tiling::Region;
+use maze_hex::debug_svg::tiling_svg;
+use maze_hex::rng::Rng;
+use maze_hex::tiling::catalogue;
+use maze_hex::tiling::source::{source_by_name, source_names};
+use maze_hex::tiling::Region;
 
 fn main() -> std::io::Result<()> {
     let dir = PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| ".".into()));

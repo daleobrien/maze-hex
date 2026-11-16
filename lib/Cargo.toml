@@ -1,5 +1,5 @@
 [package]
-name = "lib"
+name = "maze-hex"
 version = "0.1.0"
 edition = "2021"
 description = "Mazes on tilings of equal-edged polygons (triangles, squares, hexagons)"
