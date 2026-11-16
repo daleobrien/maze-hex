@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/sample-solved.svg" alt="A hexagon maze with its solution" width="100%">
+  <img src="docs/cover.png" alt="A hand-drawn hexagon maze" width="100%">
 </p>
 
 maze-hex is a sibling of [Lubra](https://github.com/daleobrien/lubra). It also

@@ -12,7 +12,7 @@ SAMPLE_ARGS ?= --seed 1 -W 30 -H 20
 RANDOM_ARGS ?= --tiling random --mix 1,1,1 --seed 1 -W 30 -H 20 -S -o random
 
 .DEFAULT_GOAL := help
-.PHONY: help build test lint fmt tilings cli random maze sample
+.PHONY: cover help build test lint fmt tilings cli random maze sample
 
 help:
 	@echo "  make build    build everything"
@@ -24,6 +24,7 @@ help:
 	@echo "  make random   draw a maze on a random mix of triangles, squares and hexagons (RANDOM_ARGS)"
 	@echo "  make maze     time one run of maze-hex (MAZE_ARGS to change its flags)"
 	@echo "  make sample   write docs/sample.svg, docs/sample-solved.svg and docs/sample-mixed.svg and docs/sample-random.svg"
+	@echo "  make cover    write docs/cover.png, the 1280x640 card the README and daleobrien.github.io show"
 
 build:
 	$(CARGO) build --workspace
@@ -57,3 +58,15 @@ sample:
 	$(CARGO) run --release -p cli -- $(SAMPLE_ARGS) -S -o docs/sample-solved
 	$(CARGO) run --release -p cli -- $(SAMPLE_ARGS) --tiling triangle-hexagon -S -o docs/sample-mixed
 	$(CARGO) run --release -p cli -- $(SAMPLE_ARGS) --tiling random -S -o docs/sample-random
+
+# The 1280 by 640 card the README and daleobrien.github.io show, laid out like
+# Lubra's: the maze, without its solution, on a white card with a thin rounded
+# border. Needs rsvg-convert and ImageMagick.
+COVER_ARGS ?= --seed 1 -W 28 -H 12
+cover:
+	$(CARGO) run --release -p cli -- $(COVER_ARGS) -o /tmp/maze-hex-cover
+	rsvg-convert -b white -w 1130 /tmp/maze-hex-cover.svg -o /tmp/maze-hex-cover.png
+	convert -size 1280x640 xc:white -fill white -stroke '#d8d8d8' -strokewidth 2 \
+		-draw "roundrectangle 1,1 1278,638 18,18" \
+		\( /tmp/maze-hex-cover.png -resize 1130x540 \) -gravity center -composite \
+		-colors 256 docs/cover.png
