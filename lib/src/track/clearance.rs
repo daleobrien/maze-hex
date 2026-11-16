@@ -7,7 +7,7 @@
 //! draws inside itself, tiles never need to be checked against each other and
 //! there is no drawing order.
 //!
-//! Tiles of one shape are all the same regular polygon, so the answer depends
+//! Tiles of one shape are all the same polygon (pentagons all numbered from their apex), so the answer depends
 //! only on the shape and the state; it is worked out once and cached.
 
 use std::collections::HashMap;
@@ -74,14 +74,19 @@ pub fn is_crossing(labels: &[u8]) -> bool {
     false
 }
 
-/// The regular polygon of `kind` with edges of length 1.
-pub fn regular(kind: PolygonKind) -> FaceGeometry {
-    let n = kind.sides();
-    let mut vertices = Vec::with_capacity(n);
+/// The polygon of `kind` with edges of length 1: regular for the triangle,
+/// square and hexagon, and for the pentagon the house, starting at its 60° apex
+/// and running anticlockwise (the same numbering as every pentagon tile).
+pub fn reference(kind: PolygonKind) -> FaceGeometry {
+    let mut vertices = Vec::with_capacity(kind.sides());
     let mut p = V2::new(0.0, 0.0);
-    for i in 0..n {
+    let mut heading = 0.0f64;
+    for corner in 0..kind.sides() {
         vertices.push(p);
-        p = p.polar(1.0, 2.0 * std::f64::consts::PI * i as f64 / n as f64);
+        p = p.polar(1.0, heading);
+        // The turn at the end of this edge is the next corner's.
+        let turn = f64::from(kind.turn_steps_at(corner + 1)) * 30f64.to_radians();
+        heading += turn;
     }
     FaceGeometry::from_vertices(vertices)
 }
@@ -137,7 +142,7 @@ impl Clearance {
     /// passing over the other, well inside the tile, and everything else in
     /// the tile still draws cleanly.
     fn bridge_is_clear(&self, kind: PolygonKind, labels: &[u8], bridge: (usize, usize)) -> bool {
-        let face = regular(kind);
+        let face = reference(kind);
         let blocks = blocks_of(labels);
         let line = |block: &Vec<usize>| face.centreline(block[0], block[1]).sample(SAMPLE_STEP);
         let (a, b) = (line(&blocks[bridge.0]), line(&blocks[bridge.1]));
@@ -157,7 +162,7 @@ impl Clearance {
         labels: &[u8],
         bridge: Option<(usize, usize)>,
     ) -> bool {
-        let face = regular(kind);
+        let face = reference(kind);
         let style = self.style;
         let blocks = blocks_of(labels);
         let mut walls = Vec::new();
@@ -298,7 +303,7 @@ fn box_gap((alo, ahi): (V2, V2), (blo, bhi): (V2, V2)) -> f64 {
 mod tests {
     use super::*;
     use crate::track::TrackStyle;
-    use PolygonKind::{Hexagon, Square, Triangle};
+    use PolygonKind::{Hexagon, Pentagon, Square, Triangle};
 
     /// Every state of an `n`-sided tile: each side closed or in a block.
     fn all_states(n: usize) -> Vec<Vec<u8>> {
@@ -332,6 +337,28 @@ mod tests {
         assert_eq!(all_states(3).len(), 15);
         assert_eq!(all_states(4).len(), 51);
         assert_eq!(all_states(6).len(), 731);
+        assert_eq!(all_states(5).len(), 188);
+    }
+
+    #[test]
+    fn the_reference_pentagon_is_the_house_starting_at_its_apex() {
+        let house = reference(Pentagon);
+        // Unit edges, and interior angles 60, 150, 90, 90, 150 from the apex.
+        let degrees = [60.0, 150.0, 90.0, 90.0, 150.0];
+        for (i, want) in degrees.into_iter().enumerate() {
+            let side = house.vertex(i + 1).minus(house.vertex(i));
+            assert!((side.length() - 1.0).abs() < 1e-9, "side {i}");
+            let back = house.vertex(i).minus(house.vertex(i + 4));
+            let turn = back.cross(side).atan2(back.dot(side));
+            let interior = 180.0 - turn.to_degrees();
+            assert!((interior - want).abs() < 1e-9, "corner {i}: {interior}");
+        }
+        // Anticlockwise, with the shape area of a square plus a triangle.
+        let area: f64 = (0..5)
+            .map(|i| house.vertex(i).cross(house.vertex(i + 1)))
+            .sum::<f64>()
+            / 2.0;
+        assert!((area - (1.0 + 3f64.sqrt() / 4.0)).abs() < 1e-9, "{area}");
     }
 
     #[test]
@@ -346,7 +373,7 @@ mod tests {
     fn every_single_block_state_is_allowed() {
         // Hub-style tiles (one block, any sides) must always draw.
         let mut clearance = Clearance::new(TrackStyle::default());
-        for kind in [Triangle, Square, Hexagon] {
+        for kind in [Triangle, Square, Hexagon, Pentagon] {
             let n = kind.sides();
             for mask in 1u32..(1 << n) {
                 let labels: Vec<u8> = (0..n).map(|i| ((mask >> i) & 1) as u8).collect();
@@ -409,13 +436,17 @@ mod tests {
     #[test]
     fn report_how_many_states_are_allowed() {
         let mut clearance = Clearance::new(TrackStyle::default());
-        for kind in [Triangle, Square, Hexagon] {
+        for kind in [Triangle, Square, Hexagon, Pentagon] {
             let states = all_states(kind.sides());
             let allowed = states.iter().filter(|s| clearance.allows(kind, s)).count();
             // Multi-block states must be possible in hexagons, or there is no
             // pass-through look at all.
             if kind == Hexagon {
                 assert!(allowed > 100, "{kind:?}: {allowed} of {}", states.len());
+            }
+            // Pentagons are small, but still need more than the one-block states.
+            if kind == Pentagon {
+                assert!(allowed > 31, "{kind:?}: {allowed} of {}", states.len());
             }
             let mut bridges = Clearance::new(TrackStyle::default()).with_crossings(true);
             let with_bridges = all_states_with_crossings(kind.sides())

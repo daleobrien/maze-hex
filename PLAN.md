@@ -67,7 +67,8 @@ edges. ✅ means it is in `lib/src/tiling/catalogue.rs` and passes the tests now
 | Square–triangle quasicrystal, with hexagon merges | 12-fold | all three | phase 4, still to do (§2.1; inflation by 2+√3, still exact) |
 | Grown mix with a chosen ratio | – | all three | ✅ `random` (`grow.rs`, `--mix T,S,H`) |
 | 2-uniform tilings (the 20 using 3/4/6) | e.g. [3⁶; 3².4.3.4] | mixed | phase 8 |
-| Rhombus / house-pentagon tilings | – | equilateral, 30° angles | phase 8 |
+| House pentagons (square + triangle merged) | – | any tiling with squares and triangles | ✅ `--pentagons F` (`pentagon.rs`) |
+| Rhombus tilings | – | equilateral, 30° angles | phase 8 |
 
 ![The tilings built so far](docs/tilings.png)
 

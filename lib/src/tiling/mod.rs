@@ -9,6 +9,7 @@
 pub mod catalogue;
 pub mod grow;
 pub mod merge;
+pub mod pentagon;
 mod region;
 pub mod rows;
 pub mod source;
@@ -23,13 +24,24 @@ pub use source::TilingSource;
 
 use crate::geometry::{Direction, Point};
 
-/// The regular polygons maze-hex uses. All have edges of length 1.
+/// The polygons maze-hex uses. All have edges of length 1. Triangle, square and
+/// hexagon are regular; the pentagon is the "house" and is not (see below).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PolygonKind {
     Triangle,
     Square,
     Hexagon,
+    /// A unit square with a unit equilateral triangle on one side, with
+    /// angles 60°, 150°, 90°, 90°, 150° (in 30° steps: 2, 5, 3, 3, 5). It is the
+    /// only equilateral pentagon whose angles are multiples of 30°, so it keeps
+    /// coordinates exact. Its corner 0 is the 60° apex and the corners run
+    /// anticlockwise from there, so a corner or side index means the same thing
+    /// on every pentagon.
+    Pentagon,
 }
+
+/// The interior angle of each corner of the house pentagon, in 30° steps.
+const HOUSE_INTERIOR_STEPS: [u8; 5] = [2, 5, 3, 3, 5];
 
 impl PolygonKind {
     /// How many sides (and edges a track may leave by).
@@ -38,15 +50,39 @@ impl PolygonKind {
             PolygonKind::Triangle => 3,
             PolygonKind::Square => 4,
             PolygonKind::Hexagon => 6,
+            PolygonKind::Pentagon => 5,
         }
     }
 
-    /// The exterior angle in 30° steps: how far to turn at each corner.
+    /// Whether every corner has the same angle.
+    pub const fn is_regular(self) -> bool {
+        !matches!(self, PolygonKind::Pentagon)
+    }
+
+    /// The interior angle at `corner` in 30° steps. Works for every kind; use
+    /// this wherever angles are summed, so a pentagon is never counted as a
+    /// regular polygon.
+    pub const fn interior_steps_at(self, corner: usize) -> u8 {
+        match self {
+            PolygonKind::Pentagon => HOUSE_INTERIOR_STEPS[corner % 5],
+            _ => self.interior_steps(),
+        }
+    }
+
+    /// The exterior angle at `corner` in 30° steps: how far to turn there.
+    pub const fn turn_steps_at(self, corner: usize) -> u8 {
+        6 - self.interior_steps_at(corner)
+    }
+
+    /// The exterior angle in 30° steps of a *regular* kind. Panics on a
+    /// pentagon, whose corners differ: use [`PolygonKind::turn_steps_at`].
     pub const fn turn_steps(self) -> u8 {
+        assert!(self.is_regular(), "a pentagon has no single corner angle");
         (12 / self.sides()) as u8
     }
 
-    /// The interior angle in 30° steps.
+    /// The interior angle in 30° steps of a *regular* kind. Panics on a
+    /// pentagon, whose corners differ: use [`PolygonKind::interior_steps_at`].
     pub const fn interior_steps(self) -> u8 {
         6 - self.turn_steps()
     }
@@ -67,10 +103,11 @@ impl Prototile {
         let mut vertices = Vec::with_capacity(self.kind.sides());
         let mut p = self.start + offset;
         let mut d = self.direction;
-        for _ in 0..self.kind.sides() {
+        for corner in 0..self.kind.sides() {
             vertices.push(p);
             p = p + d.unit();
-            d = d.turn(self.kind.turn_steps());
+            // The turn at the end of this edge is the next corner's.
+            d = d.turn(self.kind.turn_steps_at(corner + 1));
         }
         vertices
     }
@@ -457,8 +494,8 @@ mod tests {
             let mut angle = vec![0u32; tiling.points.len()];
             let mut on_boundary = vec![false; tiling.points.len()];
             for face in &tiling.faces {
-                for &v in &face.vertices {
-                    angle[v] += u32::from(face.kind.interior_steps());
+                for (corner, &v) in face.vertices.iter().enumerate() {
+                    angle[v] += u32::from(face.kind.interior_steps_at(corner));
                 }
             }
             for edge in tiling.edges.iter().filter(|e| !e.is_interior()) {

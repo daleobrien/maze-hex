@@ -17,6 +17,24 @@ pub fn assert_valid(tiling: &Tiling, label: &str) {
         assert_eq!(face.edges.len(), face.kind.sides(), "{label}");
         assert_eq!(face.vertices.len(), face.kind.sides(), "{label}");
     }
+    // Every corner turns as its kind says, which for a pentagon also means it
+    // starts at its 60° apex and runs anticlockwise.
+    for face in &tiling.faces {
+        let n = face.vertices.len();
+        let edge = |i: usize| {
+            let v = tiling.points[face.vertices[(i + 1) % n]] - tiling.points[face.vertices[i % n]];
+            v.as_unit_direction().expect("unit edge").steps()
+        };
+        for corner in 0..n {
+            let turn = (edge(corner) + 12 - edge(corner + n - 1)) % 12;
+            assert_eq!(
+                turn,
+                face.kind.turn_steps_at(corner),
+                "{label}: {:?} corner {corner}",
+                face.kind
+            );
+        }
+    }
     for (e, edge) in tiling.edges.iter().enumerate() {
         for side in edge.faces.iter().flatten() {
             assert_eq!(tiling.faces[side.face].edges[side.side], e, "{label}");
@@ -26,8 +44,8 @@ pub fn assert_valid(tiling: &Tiling, label: &str) {
     let mut angle = vec![0u32; tiling.points.len()];
     let mut on_boundary = vec![false; tiling.points.len()];
     for face in &tiling.faces {
-        for &v in &face.vertices {
-            angle[v] += u32::from(face.kind.interior_steps());
+        for (corner, &v) in face.vertices.iter().enumerate() {
+            angle[v] += u32::from(face.kind.interior_steps_at(corner));
         }
     }
     for edge in tiling.edges.iter().filter(|e| !e.is_interior()) {

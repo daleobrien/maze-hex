@@ -10,6 +10,7 @@ use lib::maze::{Maze, MazeOptions};
 use lib::render::svg::{render, SvgOptions};
 use lib::rng::Rng;
 use lib::tiling::grow::RandomMix;
+use lib::tiling::pentagon::merge_pentagons;
 use lib::tiling::source::{source_by_name, source_names};
 use lib::tiling::{Region, TilingSource};
 
@@ -60,7 +61,12 @@ fn run(options: &Options) -> Result<(), String> {
 
     // The tiling and the maze each draw from their own stream, but both start
     // from this one seed, so a single number repeats the whole picture.
-    let tiling = source.build(region, &mut Rng::new(seed));
+    let mut tiling = source.build(region, &mut Rng::new(seed));
+    if options.pentagons > 0.0 {
+        // Its own stream, so asking for pentagons doesn't reshuffle the tiling.
+        let mut rng = Rng::new(seed ^ 0x7065_6e74);
+        tiling = merge_pentagons(&tiling, options.pentagons, &mut rng);
+    }
     let maze_options = MazeOptions {
         seed,
         style: options.style,
