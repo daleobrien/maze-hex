@@ -31,6 +31,10 @@ pub struct SvgOptions {
     /// so a page can put markup in the maze's own drawing units (see
     /// [`Drawing`]) without redrawing the maze. Off by default.
     pub overlay_group: bool,
+    /// Every tile's border, faint dark blue, as a group (`id='tiles'`) first in
+    /// the flipped group, so underneath everything else. A page can show or
+    /// hide it (maze.do.id.au toggles it with D). Off by default.
+    pub tile_group: bool,
 }
 
 /// Pixels per edge length.
@@ -307,6 +311,9 @@ pub fn render(maze: &Maze, options: &SvgOptions) -> String {
     // No background, as in Lubra and maze-rs: the page shows through, and the
     // tracks are filled white, so all three look alike on maze.do.id.au.
     let _ = writeln!(svg, "<g transform='translate(0,{h:.2}) scale(1,-1)'>");
+    if options.tile_group {
+        svg.push_str(&tile_borders(maze, frame));
+    }
 
     // Walls without the bridges' upper tracks, which go on last.
     let strokes = wall_strokes(maze, true);
@@ -558,6 +565,25 @@ fn step_curves(maze: &Maze, steps: &[Step]) -> Vec<Curve> {
         .collect()
 }
 
+/// The colour and strength of the tile borders a page can show (`tile_group`).
+const TILE_BORDER: &str = "#1f3a93";
+const TILE_BORDER_OPACITY: f64 = 0.35;
+
+/// Every tile's border as one faint path in a group, `id='tiles'`.
+fn tile_borders(maze: &Maze, frame: &Frame) -> String {
+    let mut d = String::new();
+    for face in &maze.tiling.faces {
+        for (k, &v) in face.vertices.iter().enumerate() {
+            let p = frame.at(V2::from(maze.tiling.points[v].to_f64()));
+            let _ = write!(d, "{}{:.2} {:.2}", if k == 0 { "M" } else { "L" }, p.x, p.y);
+        }
+        d.push('Z');
+    }
+    format!(
+        "<g id='tiles'><path fill='none' stroke='{TILE_BORDER}' stroke-opacity='{TILE_BORDER_OPACITY}' stroke-width='1' stroke-linejoin='round' d='{d}'/></g>\n"
+    )
+}
+
 /// The pieces of the route that pass under a bridge, with their tiles.
 #[cfg(test)]
 fn route_under_bridges(maze: &Maze) -> Vec<(usize, Curve)> {
@@ -598,6 +624,7 @@ mod tests {
             ports: true,
             plain: false,
             overlay_group: false,
+            tile_group: false,
         };
         let a = render(&hex_maze(4), &options);
         assert_eq!(a, render(&hex_maze(4), &options));
@@ -646,6 +673,7 @@ mod tests {
             };
             let with = SvgOptions {
                 overlay_group: true,
+                tile_group: false,
                 ..options
             };
             let maze = hex_maze(4);
@@ -758,6 +786,7 @@ mod tests {
             ports: true,
             plain: true,
             overlay_group: false,
+            tile_group: false,
         };
         let svg = render(&hex_maze_without_crossings(4), &options);
         assert_eq!((svg.len(), fnv(&svg)), (17637, 20928853795271304));

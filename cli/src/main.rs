@@ -79,6 +79,7 @@ fn run(options: &Options) -> Result<(), String> {
             ports: options.ports,
             plain: options.plain,
             overlay_group: false,
+            tile_group: false,
         },
     );
     let path = args::output_path(&options.output);

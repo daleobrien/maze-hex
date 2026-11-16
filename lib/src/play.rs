@@ -197,6 +197,7 @@ impl Game {
     pub fn maze_svg(&self) -> String {
         let options = SvgOptions {
             overlay_group: true,
+            tile_group: true,
             ..SvgOptions::default()
         };
         render(&self.maze, &options)
@@ -909,6 +910,32 @@ mod tests {
             let rest = &svg[overlay + "<g id='overlay'></g>".len()..];
             assert!(rest.trim_start().starts_with("</g>"), "{tiling}");
             assert!(!svg.contains("stroke='#c0392b'"), "no solution in it");
+        }
+    }
+
+    #[test]
+    fn test_maze_svg_has_the_tile_borders_first_in_the_flipped_group() {
+        for (tiling, crossings) in SETUPS {
+            let game = game_for("svg", tiling, crossings);
+            let svg = game.maze_svg();
+            assert_eq!(svg.matches("<g id='tiles'>").count(), 1, "{tiling}");
+            let flipped = svg
+                .find("<g transform='translate(0,")
+                .expect("the flipped group");
+            let opened = flipped + svg[flipped..].find('>').expect("a closed tag") + 1;
+            // Underneath everything: the first thing drawn in the group.
+            assert!(
+                svg[opened..].trim_start().starts_with("<g id='tiles'>"),
+                "{tiling}"
+            );
+            // One closed border per tile.
+            let tiles = &svg[opened..];
+            let path = &tiles[..tiles.find("</g>").expect("the group ends")];
+            assert_eq!(
+                path.matches('Z').count(),
+                game.maze().tiling.faces.len(),
+                "{tiling}"
+            );
         }
     }
 
