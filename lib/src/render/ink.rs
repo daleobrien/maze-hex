@@ -22,6 +22,9 @@ use std::fmt::Write as _;
 const INK: &str = "#2b2118";
 pub const PENCIL: &str = "#c0392b";
 pub const PAPER: &str = "#ffffff";
+/// The entrance and exit dots: Lubra's red, solid and without an outline, so
+/// the three engines on maze.do.id.au share one look.
+pub const DOT: &str = "#E02020";
 
 /// The middle pen width in pixels (the plain walls are 2.5).
 pub const PEN_WIDTH: f64 = 3.0;
@@ -216,7 +219,7 @@ pub fn faint_pencil_markup(routes: &[Vec<Point>], pen: &Pen, colour: &str) -> St
     )
 }
 
-/// Red discs outlined in ink, wobbled like the walls, for the entrance and
+/// Solid red discs, wobbled like the walls, for the entrance and
 /// exit.
 pub fn dot_markup(centres: &[Point], radius: f64, pen: &Pen) -> String {
     let n = (2.0 * PI * radius / STEP).ceil().max(12.0) as usize;
@@ -231,10 +234,7 @@ pub fn dot_markup(centres: &[Point], radius: f64, pen: &Pen) -> String {
         push_polyline(&mut d, &wobbled(pen, &ring, 0));
         d.push('Z');
     }
-    format!(
-        "<path fill='{PENCIL}' fill-opacity='0.85' stroke='{INK}' stroke-width='{:.2}' d='{d}'/>\n",
-        PEN_WIDTH * 0.6
-    )
+    format!("<path fill='{DOT}' fill-opacity='1' stroke='none' d='{d}'/>\n")
 }
 
 #[cfg(test)]

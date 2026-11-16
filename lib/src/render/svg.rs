@@ -38,9 +38,6 @@ const SCALE: f64 = 40.0;
 const PADDING: f64 = 20.0;
 const WALL: &str = "#1d1d1d";
 const RED: &str = PENCIL;
-const INK: &str = "#2b2118";
-/// The faint paper behind an ink drawing; the tracks are white on it.
-const PAPER_BACKGROUND: &str = "#f7f2e8";
 
 /// Maps maze coordinates to the flipped group's pixels.
 struct Frame {
@@ -305,15 +302,8 @@ pub fn render(maze: &Maze, options: &SvgOptions) -> String {
         svg,
         "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 {w:.1} {h:.1}' width='{w:.0}' height='{h:.0}'>"
     );
-    let background = if options.plain {
-        "white"
-    } else {
-        PAPER_BACKGROUND
-    };
-    let _ = writeln!(
-        svg,
-        "<rect width='100%' height='100%' fill='{background}'/>"
-    );
+    // No background, as in Lubra and maze-rs: the page shows through, and the
+    // tracks are filled white, so all three look alike on maze.do.id.au.
     let _ = writeln!(svg, "<g transform='translate(0,{h:.2}) scale(1,-1)'>");
 
     // Walls without the bridges' upper tracks, which go on last.
@@ -436,8 +426,10 @@ pub fn render(maze: &Maze, options: &SvgOptions) -> String {
         if options.plain {
             let _ = writeln!(
                 svg,
-                "<circle cx='{:.2}' cy='{:.2}' r='{radius:.2}' fill='{RED}' stroke='{INK}' stroke-width='1.5'/>",
-                c.x, c.y
+                "<circle cx='{:.2}' cy='{:.2}' r='{radius:.2}' fill='{}'/>",
+                c.x,
+                c.y,
+                ink::DOT
             );
         } else {
             svg.push_str(&ink::dot_markup(&[(c.x, c.y)], radius, pen));
@@ -703,7 +695,8 @@ mod tests {
     fn plain_output_is_unchanged() {
         // First taken from the plain renderer before ink existed, so adding
         // ink cannot quietly alter `-P`. Re-taken once, on purpose, when the
-        // entrance and exit gained Lubra's rings.
+        // entrance and exit gained Lubra's rings, and again when the background
+        // and dots took Lubra's colours.
         let options = SvgOptions {
             solution: true,
             boundaries: true,
@@ -713,7 +706,7 @@ mod tests {
             overlay_group: false,
         };
         let svg = render(&hex_maze_without_crossings(4), &options);
-        assert_eq!((svg.len(), fnv(&svg)), (17757, 5382114260172183597));
+        assert_eq!((svg.len(), fnv(&svg)), (17637, 20928853795271304));
     }
 
     #[test]
