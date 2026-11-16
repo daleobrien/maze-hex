@@ -37,6 +37,8 @@ make cli CLI_ARGS="--seed 1 -W 30 -H 20 -S -o maze"   # draw a maze: cli/maze.sv
 make cli CLI_ARGS="--seed 1 -P -o plain"               # hand-drawn ink is the default; -P gives plain walls
 make cli CLI_ARGS="--tiling list"                      # every tiling
 make random    # a maze on a random mix: cli/random.svg; --mix T,S,H sets the triangle:square:hexagon ratio
+make pentagons # the random mix with some squares and triangles merged into pentagons
+make cli CLI_ARGS="--seed 1 -C -S -o rings"             # -C ends every dead end in a ring
 make test      # run the tests
 make lint      # cargo fmt --check and clippy, warnings as errors
 make tilings   # draw every tiling into docs/tilings/
@@ -56,7 +58,7 @@ make           # list every task
   groupings of a tile's sides can be drawn without walls crowding.
 - `lib/src/maze/`: randomised Kruskal over the tracks' joins, keeping every
   tile drawable, so a tile can carry two separate tracks, or a bridge where two
-  cross (`--crossings`, default 0.3).
+  cross (`--crossings`, default 0.5; `--junctions` favours bridges over hubs).
 - `lib/src/render/`: walls chained across tiles into one continuous line,
   written as SVG.
 

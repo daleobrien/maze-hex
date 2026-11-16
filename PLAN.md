@@ -316,7 +316,7 @@ crossing, drawn as a bridge.
   the other. At width 0.4 a square has one bridge state (the straight cross) and
   a hexagon 39.
 - **Generation.** Before the sweeps, each tile of four or more sides gets a
-  bridge with probability `--crossings` (default 0.3): two crossing chords
+  bridge with probability `--crossings` (default 0.5): two crossing chords
   picked at random from those that draw cleanly. Bridges must come first: once
   the sweeps have joined a tile's ports into one tree, a crossing track would
   close a loop. The sweeps then grow the rest of the maze round them. Setting
@@ -498,3 +498,6 @@ Still to add, by phase:
 | Where the repo lives | `~/Code/maze-hex` |
 | Ink pen | Copy Lubra's `ink.rs` for now; a shared crate can come later |
 | Crossings | Allowed in tiles of four or more sides, as bridges (§4.4) |
+| Bridges over hubs | Favoured: `--junctions` (default 0.3) keeps a junction of n sides early on with probability junctions^(n−2), and `--crossings` defaults to 0.5. On hexagons: bridges 14% → 32% of tiles, junction tiles 58% → 40%, half the dead ends |
+| Pentagons | Yes: the house pentagon (square + triangle, angles 90, 90, 150, 60, 150), by merging a square and a triangle that share an edge, on any tiling (`--pentagons F`); always numbered from its 60° apex so clearance can be cached |
+| Track ends | The entrance and exit open into Lubra's ring with a red dot, where a ring fits nearly as close to the corner; `-C`/`--circles` rings every dead end (not in triangles: no room) |
