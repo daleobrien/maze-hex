@@ -328,7 +328,7 @@ mod tests {
     }
 
     #[test]
-    fn the_numbers_of_non_crossing_states_match_the_plan() {
+    fn the_numbers_of_non_crossing_states_match_the_design() {
         assert_eq!(all_states(3).len(), 15);
         assert_eq!(all_states(4).len(), 51);
         assert_eq!(all_states(6).len(), 731);
@@ -368,7 +368,7 @@ mod tests {
     }
 
     #[test]
-    fn the_tight_cases_from_the_plan() {
+    fn the_tight_cases_from_the_design() {
         let mut clearance = Clearance::new(TrackStyle::default());
         // Two wide arcs back to back: too tight at width 0.4.
         assert!(!clearance.allows(Hexagon, &[1, 0, 1, 2, 0, 2]));
