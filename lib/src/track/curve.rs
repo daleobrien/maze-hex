@@ -40,6 +40,9 @@ impl V2 {
     }
 
     pub fn length(self) -> f64 {
+        // Not `hypot`: it guards against overflow these small numbers never
+        // reach, and is several times slower, and lengths are taken millions
+        // of times for a new maze.
         self.x.hypot(self.y)
     }
 
@@ -226,6 +229,34 @@ pub fn distance_to_polyline(p: V2, points: &[V2]) -> f64 {
         .fold(f64::INFINITY, f64::min)
 }
 
+/// Whether `p` is closer than `limit` to the polyline through `points`. The
+/// same answer as comparing [`distance_to_polyline`] with `limit`, but on
+/// squared distances and stopping at the first close segment: the clearance
+/// check asks this hundreds of thousands of times for a new maze.
+pub fn is_within(p: V2, points: &[V2], limit: f64) -> bool {
+    let limit2 = limit * limit;
+    if points.len() == 1 {
+        let d = p.minus(points[0]);
+        return d.dot(d) < limit2;
+    }
+    points
+        .windows(2)
+        .any(|w| distance2_to_segment(p, w[0], w[1]) < limit2)
+}
+
+/// The squared distance from `p` to the segment from `a` to `b`.
+fn distance2_to_segment(p: V2, a: V2, b: V2) -> f64 {
+    let ab = b.minus(a);
+    let len2 = ab.dot(ab);
+    let t = if len2 == 0.0 {
+        0.0
+    } else {
+        (p.minus(a).dot(ab) / len2).clamp(0.0, 1.0)
+    };
+    let d = p.minus(a.plus(ab.scale(t)));
+    d.dot(d)
+}
+
 fn distance_to_segment(p: V2, a: V2, b: V2) -> f64 {
     let ab = b.minus(a);
     let len2 = ab.dot(ab);
@@ -287,5 +318,8 @@ mod tests {
         let points = [V2::new(0.0, 0.0), V2::new(1.0, 0.0)];
         assert!((distance_to_polyline(V2::new(0.5, 0.3), &points) - 0.3).abs() < 1e-12);
         assert!((distance_to_polyline(V2::new(2.0, 0.0), &points) - 1.0).abs() < 1e-12);
+        assert!(is_within(V2::new(0.5, 0.3), &points, 0.31));
+        assert!(!is_within(V2::new(0.5, 0.3), &points, 0.29));
+        assert!(!is_within(V2::new(2.0, 0.0), &points, 1.0));
     }
 }

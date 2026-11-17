@@ -652,8 +652,11 @@ so fewer states fit; at 0.4 the straight-plus-arc state is allowed and the
 double wide arc is not. `Clearance` (`track/clearance.rs`) samples every
 block's walls every 0.02 edge lengths for every polygon and every state, and
 caches the answer per shape and state, because all tiles of one shape are the
-same regular polygon. About 800 states are cheap, so nothing needs code
-generation. A dead end into a straight track in a square (`{0,2}` with side 1
+same regular polygon. The cache is shared by every maze made in the same
+program, so the website works the answers out for its first maze only. About
+800 states are cheap, so nothing needs code generation: the walls are compared
+on squared distances, and only the points near the other wall's box are
+compared at all. A dead end into a straight track in a square (`{0,2}` with side 1
 as its own block) is refused, because the cap hits the track.
 
 ### 5.5 Output and flags

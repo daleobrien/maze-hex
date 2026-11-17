@@ -8,11 +8,14 @@
 //! there is no drawing order.
 //!
 //! Tiles of one shape are all the same regular polygon, so the answer depends
-//! only on the shape and the state; it is worked out once and cached.
+//! only on the shape and the state; it is worked out once and cached, and the
+//! cache outlives the maze, so the next maze in the same program (the website's
+//! next maze, say) starts with every answer already known.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 
-use super::curve::{distance_to_polyline, V2};
+use super::curve::{is_within, V2};
 use super::face::FaceGeometry;
 use super::TrackStyle;
 use crate::tiling::PolygonKind;
@@ -86,6 +89,19 @@ pub fn regular(kind: PolygonKind) -> FaceGeometry {
     FaceGeometry::from_vertices(vertices)
 }
 
+/// What the answer depends on besides the shape and state: the style's
+/// numbers (as bits, so they hash) and whether bridges are allowed.
+type Setting = ([u64; 6], bool, bool);
+
+/// A cache key: the setting, the shape and the canonical state.
+type Key = (Setting, PolygonKind, Vec<u8>);
+
+thread_local! {
+    /// Every answer worked out so far in this program, for every setting.
+    /// Thread-local, so no locking; a program makes its mazes on one thread.
+    static ANSWERS: RefCell<HashMap<Key, bool>> = RefCell::new(HashMap::new());
+}
+
 /// The cached answers to "can this state be drawn?".
 #[derive(Debug)]
 pub struct Clearance {
@@ -122,15 +138,41 @@ impl Clearance {
         if let Some(&answer) = self.cache.get(&key) {
             return answer;
         }
-        let answer = if is_crossing(&key.1) {
-            self.crossings
-                && bridge_of(&key.1)
-                    .is_some_and(|bridge| self.bridge_is_clear(kind, &key.1, bridge))
-        } else {
-            self.draws_cleanly(kind, &key.1, None)
-        };
+        let shared = (self.setting(), key.0, key.1.clone());
+        if let Some(answer) = ANSWERS.with(|answers| answers.borrow().get(&shared).copied()) {
+            self.cache.insert(key, answer);
+            return answer;
+        }
+        let answer = self.work_out(kind, &key.1);
+        ANSWERS.with(|answers| answers.borrow_mut().insert(shared, answer));
         self.cache.insert(key, answer);
         answer
+    }
+
+    /// This checker's setting, for the shared cache.
+    fn setting(&self) -> Setting {
+        let s = self.style;
+        let numbers = [
+            s.width,
+            s.gap,
+            s.margin,
+            s.cap_depth,
+            s.ring_radius,
+            s.ring_blend,
+        ];
+        (numbers.map(f64::to_bits), s.circles, self.crossings)
+    }
+
+    /// Works out whether a tile of `kind` in canonical state `labels` draws
+    /// cleanly.
+    fn work_out(&self, kind: PolygonKind, labels: &[u8]) -> bool {
+        if is_crossing(labels) {
+            self.crossings
+                && bridge_of(labels)
+                    .is_some_and(|bridge| self.bridge_is_clear(kind, labels, bridge))
+        } else {
+            self.draws_cleanly(kind, labels, None)
+        }
     }
 
     /// Whether the two tracks of a bridge cross squarely enough to read as one
@@ -205,9 +247,12 @@ impl Clearance {
                 if exempt(i, j) || box_gap(boxes[i], boxes[j]) >= style.gap {
                     continue;
                 }
+                // Only points near the other wall's box can be near the wall.
+                let near = |p: &V2| box_gap2((*p, *p), boxes[j]) < style.gap * style.gap;
                 if samples[i]
                     .iter()
-                    .any(|&p| distance_to_polyline(p, &samples[j]) < style.gap)
+                    .filter(|p| near(p))
+                    .any(|&p| is_within(p, &samples[j], style.gap))
                 {
                     return false;
                 }
@@ -285,6 +330,13 @@ fn bounds(points: &[V2]) -> (V2, V2) {
             )
         },
     )
+}
+
+/// The square of how far apart two boxes are (0 if they overlap).
+fn box_gap2((alo, ahi): (V2, V2), (blo, bhi): (V2, V2)) -> f64 {
+    let dx = (blo.x - ahi.x).max(alo.x - bhi.x).max(0.0);
+    let dy = (blo.y - ahi.y).max(alo.y - bhi.y).max(0.0);
+    dx * dx + dy * dy
 }
 
 /// How far apart two boxes are (0 if they overlap).

@@ -8,6 +8,7 @@
 use std::fmt::Write;
 
 use super::ink::{self, Pen, Point, PENCIL};
+use super::number::push_fixed;
 use super::walls::{bridges, wall_strokes, BridgeShape, Stroke};
 use crate::maze::solution::Step;
 use crate::maze::{Cap, Maze};
@@ -575,7 +576,10 @@ fn tile_borders(maze: &Maze, frame: &Frame) -> String {
     for face in &maze.tiling.faces {
         for (k, &v) in face.vertices.iter().enumerate() {
             let p = frame.at(V2::from(maze.tiling.points[v].to_f64()));
-            let _ = write!(d, "{}{:.2} {:.2}", if k == 0 { "M" } else { "L" }, p.x, p.y);
+            d.push(if k == 0 { 'M' } else { 'L' });
+            push_fixed(&mut d, p.x, 2);
+            d.push(' ');
+            push_fixed(&mut d, p.y, 2);
         }
         d.push('Z');
     }

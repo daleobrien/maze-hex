@@ -12,7 +12,7 @@ SAMPLE_ARGS ?= --seed 1 -W 30 -H 20
 RANDOM_ARGS ?= --tiling random --mix 1,1,1 --seed 1 -W 30 -H 20 -S -o random
 
 .DEFAULT_GOAL := help
-.PHONY: cover gallery help build test lint fmt tilings cli random maze sample
+.PHONY: cover gallery help build test lint fmt tilings cli random maze sample timing
 
 help:
 	@echo "  make build    build everything"
@@ -23,6 +23,7 @@ help:
 	@echo "  make cli      run the maze-hex command in cli/ (CLI_ARGS to change its flags)"
 	@echo "  make random   draw a maze on a random mix of triangles, squares and hexagons (RANDOM_ARGS)"
 	@echo "  make maze     time one run of maze-hex (MAZE_ARGS to change its flags)"
+	@echo "  make timing   time making and drawing a maze at each of the website's hexagon levels"
 	@echo "  make sample   write docs/sample.svg, docs/sample-solved.svg and docs/sample-mixed.svg and docs/sample-random.svg"
 	@echo "  make cover    write docs/cover.png, the 1280x640 card the README and daleobrien.github.io show"
 	@echo "  make gallery  write docs/mazes.png, one maze on every tiling, for docs/tilings.md"
@@ -53,6 +54,9 @@ random:
 maze:
 	$(CARGO) build --release -p cli
 	cd cli && time ../target/release/maze-hex $(MAZE_ARGS)
+
+timing:
+	$(CARGO) run --release -q -p maze-hex --example timing
 
 sample:
 	$(CARGO) run --release -p cli -- $(SAMPLE_ARGS) -o docs/sample

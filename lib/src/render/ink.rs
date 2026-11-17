@@ -17,6 +17,8 @@
 use std::f64::consts::PI;
 use std::fmt::Write as _;
 
+use super::number::push_fixed;
+
 /// The ink, the pencil used for the route and end markers, and the paper
 /// inside a track.
 const INK: &str = "#2b2118";
@@ -119,7 +121,10 @@ impl Pen {
 /// Appends a polyline as path data.
 fn push_polyline(out: &mut String, points: &[Point]) {
     for (k, &(x, y)) in points.iter().enumerate() {
-        let _ = write!(out, "{}{x:.1} {y:.1}", if k == 0 { "M" } else { "L" });
+        out.push(if k == 0 { 'M' } else { 'L' });
+        push_fixed(out, x, 1);
+        out.push(' ');
+        push_fixed(out, y, 1);
     }
 }
 
