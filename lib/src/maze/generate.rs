@@ -474,9 +474,9 @@ fn keep_largest_tree(state: &mut State) {
     let Some(best) = (0..edges).max_by_key(|&root| size[root]) else {
         return;
     };
-    for e in 0..edges {
-        if state.open[e] && uf.find(e) != best {
-            state.open[e] = false;
+    for (e, open) in state.open.iter_mut().enumerate() {
+        if *open && uf.find(e) != best {
+            *open = false;
         }
     }
     // Drop chord labels on sides whose ports were closed.
